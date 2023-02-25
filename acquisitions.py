@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from datetime import date, datetime, timedelta
-from typing import Any, List
+from typing import Any, List, Optional
 
 try:
     from com.sun.star.util import DateTime
@@ -20,10 +20,12 @@ COLUMNS = {
     "Zielbudget": ("target_budget", float, 3),
     "Davon allokiert": ("budget_acquired", float, 4),
     "Entsprechend verfügbar": None,
-    "Gewichtung": ("weight", int, 6),
-    "Debug": (None, str, 7),
+    "Anteil": None,
+    "Gewichtung": ("weight", int, 7),
+    "Debug": (None, str, 8),
 }
 PLANNING_DAY_OF_MONTH = 1
+LIBRE_OFFICE_DATE_FORMAT = "%d.%m.%y"
 
 try:
     desktop = XSCRIPTCONTEXT.getDesktop()
@@ -135,7 +137,7 @@ class BasePlanning:
         earliest_planning_day = date(
             earliest_start_date.year, earliest_start_date.month, PLANNING_DAY_OF_MONTH
         )
-        if earliest_planning_day == self.today:
+        if earliest_start_date == self.today:
             return
         if earliest_planning_day < earliest_start_date:
             tmp = earliest_planning_day + timedelta(days=32)
@@ -144,7 +146,7 @@ class BasePlanning:
             )
         planning_date = earliest_planning_day
         self._planning_dates = []
-        while planning_date < self.today:
+        while planning_date <= self.today:
             self._planning_dates.append(planning_date)
             sum_of_weights = self.sum_of_relevant_weights_at_planning_date(
                 planning_date
@@ -183,7 +185,7 @@ class SpreadsheetAcquisition(BaseAcquisition):
         if expected_type == float:
             return float(value)
         if expected_type == date:
-            return datetime.strptime(value, "%d.%m.%y").date()
+            return datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
         return value
 
     def write_values(self):
@@ -208,7 +210,12 @@ class SpreadsheetPlanning(BasePlanning):
             model.getSheets().getByName("Übersicht").getCellByPosition(1, 49).getValue()
         )
         self.planning_debug_cell = sheet.getCellByPosition(0, 4)
-        super().__init__(acquisitions, monthly_budget)
+        today_overwrite_cell = sheet.getCellByPosition(6, 3)
+        value = today_overwrite_cell.getString()
+        today: Optional[date] = None
+        if value:
+            today = datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
+        super().__init__(acquisitions, monthly_budget, today=today)
 
     @staticmethod
     def get_acquisitions():

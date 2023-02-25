@@ -61,6 +61,20 @@ def test_planning_calculate_acquired_budgets_does_start_on_first_day_in_past():
     planning.calculate_acquired_budgets()
     assert acquisition.budget_acquired == 10
 
+def test_planning_calculate_acquired_budgets_does_start_on_first_day_when_after_start_date():
+    acquisition = BaseAcquisition(
+        name="test",
+        start_budget=0,
+        target_budget=100,
+        budget_acquired=0,
+        start_date=date(2023, 1, 27),
+        weight=1,
+    )
+    today = date(2023, 2, 1)
+    planning = BasePlanning(acquisitions=[acquisition], monthly_budget=10, today=today)
+    planning.calculate_acquired_budgets()
+    assert acquisition.budget_acquired == 10
+
 
 def test_planning_calculate_acquired_budgets_single_acquisition_before_start():
     acquisition = BaseAcquisition(
