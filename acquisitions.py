@@ -48,14 +48,13 @@ class BaseAcquisition:
         name: str,
         start_budget: float,
         target_budget: float,
-        budget_acquired: float,
         start_date: date,
         weight: int,
     ):
         self.name = name
         self.start_budget = start_budget
         self.target_budget = target_budget
-        self.budget_acquired = budget_acquired
+        self.budget_acquired = self.start_budget
         self.start_date = start_date
         self.weight = weight
 
@@ -76,6 +75,11 @@ class BasePlanning:
     acquisitions: List[BaseAcquisition]
     monthly_budget: float
     sum_of_weights: int
+    # to allocate to all acquisitions as a starting budget depending on their weight
+    # regardless of their start date.
+    # Useful for example when irregular income boosts capital.
+    # Reads extra cell on spreadsheet currently depending on account surplus.
+    start_budget: float
     today: date  # for testing
     _planning_dates: List[date]
 
@@ -83,6 +87,7 @@ class BasePlanning:
         self,
         acquisitions: List[BaseAcquisition],
         monthly_budget: float,
+        start_budget: float,
         today: date = None,
     ):
         self.acquisitions = acquisitions
@@ -90,6 +95,7 @@ class BasePlanning:
         self.sum_of_weights = sum(
             [acquisition.weight for acquisition in self.acquisitions]
         )
+        self.start_budget = start_budget
         self.today = today or date.today()
         self._planning_dates = []
 
@@ -100,6 +106,12 @@ class BasePlanning:
                 lambda a: a.start_date <= planning_date and a.request_budget(),
                 self.acquisitions,
             )
+        )
+
+    def sum_of_relevant_weights(self):
+        return sum(
+            acquisition.weight
+            for acquisition in filter(lambda a: a.request_budget(), self.acquisitions)
         )
 
     def allocate_budget(
@@ -128,9 +140,28 @@ class BasePlanning:
                 ),
             )
 
+    def allocate_planning_start_budget(self, budget: float):
+        extra_budget = 0
+        for acquisition in self.acquisitions:
+            requested_budget = acquisition.request_budget()
+            if requested_budget == 0:
+                continue
+            sum_of_weights = self.sum_of_relevant_weights()
+            if sum_of_weights == 0:
+                return  # all acquisitions allocated for 100%
+            available_budget = budget * acquisition.weight / sum_of_weights
+            if requested_budget >= available_budget:
+                acquisition.allocate_budget(available_budget)
+            else:
+                acquisition.allocate_budget(requested_budget)
+                extra_budget += available_budget - requested_budget
+        if extra_budget:
+            self.allocate_planning_start_budget(extra_budget)
+
     def calculate_acquired_budgets(self):
         if not self.acquisitions:
             return
+        self.allocate_planning_start_budget(self.start_budget)
         earliest_start_date = min(
             [acquisition.start_date for acquisition in self.acquisitions]
         )
@@ -168,10 +199,9 @@ class SpreadsheetAcquisition(BaseAcquisition):
             if attribute and attribute[0]:
                 cell = sheet.getCellByPosition(attribute[2], row)
                 properties[attribute[0]] = self.extract_value(cell, attribute[1])
-
-        properties["budget_acquired"] = properties[
-            "start_budget"
-        ]  # so there's no state kept in the Spreadsheet, instead should be calculated every month since the start_date
+        # as that's only meant to be written, not read but instead
+        # recalculated based on the other values
+        del properties["budget_acquired"]
         super().__init__(**properties)
 
     @staticmethod
@@ -204,7 +234,7 @@ class SpreadsheetAcquisition(BaseAcquisition):
 class SpreadsheetPlanning(BasePlanning):
     planning_debug_cell: Any
 
-    def __init__(self):
+    def __init__(self, start_budget: float = None):
         acquisitions = SpreadsheetPlanning.get_acquisitions()
         monthly_budget = (
             model.getSheets().getByName("Übersicht").getCellByPosition(1, 49).getValue()
@@ -215,7 +245,9 @@ class SpreadsheetPlanning(BasePlanning):
         today: Optional[date] = None
         if value:
             today = datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
-        super().__init__(acquisitions, monthly_budget, today=today)
+        if start_budget is None:
+            start_budget = sheet.getCellByPosition(11, 3).getValue()
+        super().__init__(acquisitions, monthly_budget, start_budget, today=today)
 
     @staticmethod
     def get_acquisitions():
@@ -249,12 +281,22 @@ class SpreadsheetPlanning(BasePlanning):
         debug_info = f"Planning(monthly_budget={self.monthly_budget}, sum_of_weights={self.sum_of_weights}, months={len(self._planning_dates)}, planning_dates={planning_dates})"
         self.planning_debug_cell.setString(debug_info)
 
+    def write_sum_of_acquired_budgets(self):
+        sum_of_acquired_budgets = sum(
+            [acquisition.budget_acquired for acquisition in self.acquisitions]
+        )
+        sheet.getCellByPosition(10, 5).setValue(sum_of_acquired_budgets)
+
 
 def CalculateBudgets(*args):
-    planning = SpreadsheetPlanning()
-    planning.calculate_acquired_budgets()
-    planning.write_values()
-    planning.clear_debug_info()
+    planning_without_start_budget = SpreadsheetPlanning(start_budget=0)
+    planning_without_start_budget.calculate_acquired_budgets()
+    planning_without_start_budget.write_sum_of_acquired_budgets()
+
+    main_planning = SpreadsheetPlanning()
+    main_planning.calculate_acquired_budgets()
+    main_planning.write_values()
+    main_planning.clear_debug_info()
 
     # planning.write_debug_info()
 
