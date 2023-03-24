@@ -142,13 +142,13 @@ class BasePlanning:
 
     def allocate_planning_start_budget(self, budget: float):
         extra_budget = 0
+        sum_of_weights = self.sum_of_relevant_weights()
         for acquisition in self.acquisitions:
             requested_budget = acquisition.request_budget()
             if requested_budget == 0:
                 continue
-            sum_of_weights = self.sum_of_relevant_weights()
-            if sum_of_weights == 0:
-                return  # all acquisitions allocated for 100%
+            if sum_of_weights == 0:  # all acquisitions allocated for 100%
+                return
             available_budget = budget * acquisition.weight / sum_of_weights
             if requested_budget >= available_budget:
                 acquisition.allocate_budget(available_budget)
