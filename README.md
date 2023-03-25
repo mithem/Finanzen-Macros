@@ -1,12 +1,10 @@
 # Finanzen-Macros
 
-**Note:** This currently is designed for macOS first. It might work on UNIX-like systems and/or windows, possibly with modifications and manual setup.
-
-Macros for my Finanzen.ods (LibreOffice) file.
+Macros for my Finanzen.ods (LibreOffice) file. Tested on macOS and Windows. Should work on linux as well (possibly with minor modifications).
 
 ### Setup
 
-- install python3
+- install python (version 3)
 - `pip install -r requirements.txt`
+- install Java Runtime Environment (https://wiki.documentfoundation.org/Faq/General/InstallJava)
 - APSO LibreOffice extension for managing python macros (https://extensions.libreoffice.org/en/extensions/show/apso-alternative-script-organizer-for-python)
-- you may need to reassign button actions to the correct macro
