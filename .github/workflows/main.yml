@@ -29,8 +29,6 @@ jobs:
         uses: actions/setup-python@v3.1.2
         with:
           python-version: "3.11"
-      - name: Copy config files
-        run: cp home_automation_ci.conf.yml home_automation.conf.yml
       - name: Install tox
         run: pip3 install $(cat requirements.txt | grep tox)
       - name: Run tox
