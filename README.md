@@ -1,3 +1,5 @@
+[![CI](https://github.com/mithem/Finanzen-Macros/actions/workflows/main.yml/badge.svg)](https://github.com/mithem/Finanzen-Macros/actions/workflows/main.yml)
+
 # Finanzen-Macros
 
 Macros for my Finanzen.ods (LibreOffice) file. Tested on macOS and Windows. Should work on linux as well (possibly with minor modifications).
