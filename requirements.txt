@@ -1,2 +1,7 @@
 numpy
-tox==3
+tox==4.*
+pylint_exit
+pylint
+mypy
+pytest
+pytest-cov
