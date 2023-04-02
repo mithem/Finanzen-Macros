@@ -1,8 +1,10 @@
 # coding: utf-8
+"""Set the planning simulation date in the spreadsheet."""
 from __future__ import unicode_literals
 import datetime
 
-desktop = XSCRIPTCONTEXT.getDesktop()
+# pylint: disable=undefined-variable
+desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
 model = desktop.getCurrentComponent()
 sheet = model.getSheets().getByName("Anschaffungen")
 
@@ -24,19 +26,23 @@ def _set_to_date_in_months(months: int):
     SIMULATION_DATE_CELL.setString(string)
 
 
-def SetDateToToday(*args):
+def SetDateToToday(*args):  # pylint: disable=invalid-name,unused-argument
+    """Set the simulation date to today."""
     _set_to_date_in_months(0)
 
 
-def SetDateToInThreeMonths(*args):
+def SetDateToInThreeMonths(*args):  # pylint: disable=invalid-name,unused-argument
+    """Set the simulation date to three months from now."""
     _set_to_date_in_months(3)
 
 
-def SetDateToInSixMonths(*args):
+def SetDateToInSixMonths(*args):  # pylint: disable=invalid-name,unused-argument
+    """Set the simulation date to six months from now."""
     _set_to_date_in_months(6)
 
 
-def SetDateToInAYear(*args):
+def SetDateToInAYear(*args):  # pylint: disable=invalid-name,unused-argument
+    """Set the simulation date to a year from now."""
     _set_to_date_in_months(12)
 
 

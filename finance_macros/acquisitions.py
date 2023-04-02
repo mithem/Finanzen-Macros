@@ -1,15 +1,10 @@
 # coding: utf-8
+"""Acquisition budgeting."""
 from __future__ import unicode_literals
 
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, List, Optional, Type
-
-try:
-    from com.sun.star.util import DateTime
-except ImportError:
-    pass  # running tests (not using Spreadsheet classes)
-
 
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
@@ -29,7 +24,7 @@ PLANNING_DAY_OF_MONTH = 1
 LIBRE_OFFICE_DATE_FORMAT = "%d.%m.%y"
 
 try:
-    desktop = XSCRIPTCONTEXT.getDesktop()
+    desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
     model = desktop.getCurrentComponent()
     sheet = model.getSheets().getByName("Anschaffungen")
 except NameError:
@@ -37,6 +32,8 @@ except NameError:
 
 
 class BaseAcquisition:
+    """A base class for all acquisitions."""
+
     name: str
     start_budget: float
     target_budget: float
@@ -51,7 +48,7 @@ class BaseAcquisition:
         target_budget: float,
         start_date: date,
         weight: int,
-    ):
+    ):  # pylint: disable=too-many-arguments
         self.name = name
         self.start_budget = start_budget
         self.target_budget = target_budget
@@ -60,13 +57,20 @@ class BaseAcquisition:
         self.weight = weight
 
     def request_budget(self):
+        """Return the amount of budget that is still needed to reach the target budget."""
         return self.target_budget - self.budget_acquired
 
     def allocate_budget(self, budget: float):
+        """Allocate budget to this acquisition."""
         self.budget_acquired += budget
 
     def __str__(self):
-        return f"{self.name}(budget_acquired={self.budget_acquired}, tart_date={self.start_date}, start_budget={self.start_budget}, target_budget={self.target_budget}, weight={self.weight})"
+        return f"{self.name}(\
+budget_acquired={self.budget_acquired}, \
+start_date={self.start_date}, \
+start_budget={self.start_budget}, \
+target_budget={self.target_budget}, \
+weight={self.weight})"
 
     def __repr__(self):
         return str(self)
@@ -91,18 +95,20 @@ class BasePlanning:
         acquisitions: List[BaseAcquisition],
         monthly_budget: float,
         start_budget: float,
-        today: date = None,
+        today: Optional[date] = None,
     ):
         self.acquisitions = acquisitions
         self.monthly_budget = monthly_budget
         self.sum_of_weights = sum(
-            [acquisition.weight for acquisition in self.acquisitions]
+            acquisition.weight for acquisition in self.acquisitions
         )
         self.start_budget = start_budget
         self.today = today or date.today()
         self._planning_dates = []
 
     def sum_of_relevant_weights_at_planning_date(self, planning_date: date):
+        """Return the sum of weights of all acquisitions that are relevant
+        for the given planning date."""
         return sum(
             acquisition.weight
             for acquisition in filter(
@@ -112,17 +118,20 @@ class BasePlanning:
         )
 
     def sum_of_relevant_weights(self):
+        """Return the sum of weights of all acquisitions that are relevant"""
         return sum(
             acquisition.weight
             for acquisition in filter(lambda a: a.request_budget(), self.acquisitions)
         )
 
     def calculate_acquired_budgets(self):
+        """Calculate the acquired budgets for all acquisitions at the `today` date."""
         raise NotImplementedError
 
     def get_earliest_planning_date(self) -> Optional[date]:
+        """Return the earliest relevant planning date for this planning."""
         earliest_start_date = min(
-            [acquisition.start_date for acquisition in self.acquisitions]
+            acquisition.start_date for acquisition in self.acquisitions
         )
         earliest_planning_day = date(
             earliest_start_date.year, earliest_start_date.month, PLANNING_DAY_OF_MONTH
@@ -138,14 +147,18 @@ class BasePlanning:
 
     @staticmethod
     def get_next_planning_date(planning_date: date) -> date:
+        """Return the next planning date after the given planning date."""
         tmp = planning_date + timedelta(days=32)
         return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
 
 
 class BasePlanningWeightedMonthlyContribution(BasePlanning):
+    """Class for all plannings using the weighted monthly contribution mode."""
+
     def allocate_budget(
         self, budget: float, planning_date: date, sum_of_weights_at_planning_date: int
     ):
+        """Allocate budget to all acquisitions that are relevant for the given planning date."""
         if budget == 0:
             return
         extra_budget = 0
@@ -164,12 +177,13 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
             self.allocate_budget(
                 extra_budget,
                 planning_date,
-                self.sum_of_relevant_weights_at_planning_date(  # needs to be recalculated if extra_budget is available as some acquisition is fully funded and therefore doesn't apply anymore
-                    planning_date
-                ),
+                # needs to be recalculated if extra_budget is available as some acquisition is fully
+                # funded and therefore doesn't apply anymore
+                self.sum_of_relevant_weights_at_planning_date(planning_date),
             )
 
     def allocate_planning_start_budget(self, budget: float):
+        """Allocate the planning's start budget to all acquisitions, depending on their weight."""
         extra_budget = 0
         sum_of_weights = self.sum_of_relevant_weights()
         for acquisition in self.acquisitions:
@@ -205,12 +219,16 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
 
 
 class BasePlanningBaseSequentialAcquisition(BasePlanning):
+    """Class for all plannings using the sequential acquisition mode (using different sequences)."""
+
     def get_acquisition_sequence(self) -> List[BaseAcquisition]:
+        """Return the sequence acquisitions should be acquired in."""
         raise NotImplementedError
 
     def allocate_planning_start_budget(
         self, acquisition_sequence: List[BaseAcquisition]
     ):
+        """Allocate the planning's start budget to all acquisitions in the given sequence."""
         available_budget = self.start_budget
         acq_count = len(acquisition_sequence)
         acq_idx = 0
@@ -247,16 +265,20 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
 
 
 class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
+    """Planning using the sequential acquisition mode with a priority
+    sequence of `start_date`, `weight`, `target_budget`, `name`."""
+
     def get_acquisition_sequence(self) -> List[BaseAcquisition]:
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
         budget_sorted = sorted(name_sorted, key=lambda a: a.target_budget)
         weight_sorted = sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
-        return sorted(
-            weight_sorted, key=lambda a: a.start_date
-        )  # sort by start date, then by weight, then by target budget, then by name as sorted uses a stable sorting algorithm
+        return sorted(weight_sorted, key=lambda a: a.start_date)
 
 
 class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
+    """Planning using the sequential acquisition mode with a priority
+    sequence of `weight`, `target_budget`, `start_date`, `name`."""
+
     def get_acquisition_sequence(self) -> List[BaseAcquisition]:
         # sort by weight, then budget, then date, then name
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
@@ -266,6 +288,8 @@ class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquis
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
+    """Class for acquisitions read from the spreadsheet."""
+
     row: int
 
     def __init__(self, row: int):
@@ -282,6 +306,8 @@ class SpreadsheetAcquisition(BaseAcquisition):
 
     @staticmethod
     def extract_value(cell, expected_type):
+        """Extract the value from the given cell, converting it to the
+        `expected_type` if necessary."""
         if expected_type in (str, date):
             value = cell.getString()
         else:
@@ -295,22 +321,32 @@ class SpreadsheetAcquisition(BaseAcquisition):
         return value
 
     def write_values(self):
+        """Write the relevant values of this acquisition to the spreadsheet."""
         budget_acquired_cell = sheet.getCellByPosition(
-            COLUMNS["Davon allokiert"][2], self.row
+            COLUMNS["Davon allokiert"][2], self.row  # type: ignore
         )
         budget_acquired_cell.setValue(self.budget_acquired)
 
     def clear_debug_info(self):
-        sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString("")
+        """Clear the debug info of this acquisition from the spreadsheet."""
+        sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString(  # type: ignore
+            ""
+        )
 
     def write_debug_info(self):
-        sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString(str(self))
+        """Write the debug info of this acquisition to the spreadsheet."""
+        sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString(  # type: ignore
+            str(self)
+        )
 
 
-class SpreadsheetPlanning(BasePlanning):
+class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
+    """Class for reading the planning data from the spreadsheet."""
+
     planning_debug_cell: Any
+    acquisitions: List[SpreadsheetAcquisition]  # type: ignore
 
-    def __init__(self, start_budget: float = None):
+    def __init__(self, start_budget: Optional[float] = None):
         acquisitions = SpreadsheetPlanning.get_acquisitions()
         monthly_budget = (
             model.getSheets().getByName("Übersicht").getCellByPosition(1, 49).getValue()
@@ -327,6 +363,7 @@ class SpreadsheetPlanning(BasePlanning):
 
     @staticmethod
     def get_acquisitions():
+        """Return the acquisitions read from the spreadsheet."""
         acquisitions: List[SpreadsheetAcquisition] = []
         end = 100
         for row in range(ROW_START_IDX, end):
@@ -338,28 +375,42 @@ class SpreadsheetPlanning(BasePlanning):
         return acquisitions
 
     def write_values(self):
+        """Write the relevant values of this planning to the spreadsheet."""
         for acquisition in self.acquisitions:
             acquisition.write_values()
 
     def clear_debug_info(self):
+        """Clear the debug info of this planning from the spreadsheet."""
         for acquisition in self.acquisitions:
             acquisition.clear_debug_info()
 
         self.planning_debug_cell.setString("")
 
     def write_debug_info(self):
+        """Write the debug info of this planning to the spreadsheet."""
         for acquisition in self.acquisitions:
             acquisition.write_debug_info()
 
         planning_dates = (
-            "[" + ", ".join(map(lambda d: str(d), self._planning_dates)) + "]"
+            "["
+            + ", ".join(
+                map(
+                    lambda d: str(d),  # pylint: disable=unnecessary-lambda
+                    self._planning_dates,
+                )
+            )
+            + "]"
         )
-        debug_info = f"Planning(monthly_budget={self.monthly_budget}, sum_of_weights={self.sum_of_weights}, months={len(self._planning_dates)}, planning_dates={planning_dates})"
+        debug_info = f"Planning(monthly_budget={self.monthly_budget}, \
+sum_of_weights={self.sum_of_weights}, \
+months={len(self._planning_dates)}, \
+planning_dates={planning_dates})"
         self.planning_debug_cell.setString(debug_info)
 
     def write_sum_of_acquired_budgets(self):
+        """Write the sum of acquired budgets to the spreadsheet."""
         sum_of_acquired_budgets = sum(
-            [acquisition.budget_acquired for acquisition in self.acquisitions]
+            acquisition.budget_acquired for acquisition in self.acquisitions
         )
         sheet.getCellByPosition(10, 5).setValue(sum_of_acquired_budgets)
 
@@ -367,34 +418,37 @@ class SpreadsheetPlanning(BasePlanning):
 class SpreadsheetPlanningWeightedMonthlyContribution(
     SpreadsheetPlanning, BasePlanningWeightedMonthlyContribution
 ):
-    pass
+    """Planning with weighted monthly contribution mode."""
 
 
 class SpreadsheetPlanningDatedSequentialAcquisition(
     SpreadsheetPlanning, BasePlanningDatedSequentialAcquisition
 ):
-    pass
+    """Planning with dated sequential acquisition mode."""
 
 
 class SpreadsheetPlanningWeightedSequentialAcquisition(
     SpreadsheetPlanning, BasePlanningWeightedSequentialAcquisition
 ):
-    pass
+    """Planning with weighted sequential acquisition mode."""
 
 
 class PlanningMode(Enum):
+    """Enum for the different planning modes."""
+
     WEIGHTED_MONTHLY_CONTRIBUTION = 1
     DATED_SEQUENTIAL_ACQUISITION = 2
     WEIGHTED_SEQUENTIAL_ACQUISITION = 3
 
     @staticmethod
     def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
+        """Read the planning mode from the spreadsheet."""
         value = sheet.getCellByPosition(10, 7).getString()
         if value == "Gewichtete monatliche Allokation":
             return PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
-        elif value == "Datierte sequenzielle Allokation":
+        if value == "Datierte sequenzielle Allokation":
             return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
-        elif value == "Gewichtete sequenzielle Allokation":
+        if value == "Gewichtete sequenzielle Allokation":
             return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
         raise ValueError(f"Unsupported planning mode '{value}'")
 
@@ -402,6 +456,7 @@ class PlanningMode(Enum):
 def calculate_budgets(
     PlanningType: Type[SpreadsheetPlanning],
 ):  # pylint: disable=invalid-name
+    """Calculate the acquired budgets for the given planning mode."""
     planning_without_start_budget = PlanningType(start_budget=0)
     planning_without_start_budget.calculate_acquired_budgets()
     planning_without_start_budget.write_sum_of_acquired_budgets()
@@ -411,7 +466,8 @@ def calculate_budgets(
     main_planning.write_values()
 
 
-def CalculateBudgets(*args):
+def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
+    """Calculate the acquired budgets for the planning mode on the spreadsheet."""
     mode = PlanningMode.read_from_spreadsheet()
     if mode == PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION:
         calculate_budgets(SpreadsheetPlanningWeightedMonthlyContribution)
