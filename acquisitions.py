@@ -2,7 +2,8 @@
 from __future__ import unicode_literals
 
 from datetime import date, datetime, timedelta
-from typing import Any, List, Optional
+from enum import Enum
+from typing import Any, List, Optional, Type
 
 try:
     from com.sun.star.util import DateTime
@@ -61,7 +62,7 @@ class BaseAcquisition:
     def request_budget(self):
         return self.target_budget - self.budget_acquired
 
-    def allocate_budget(self, budget):
+    def allocate_budget(self, budget: float):
         self.budget_acquired += budget
 
     def __str__(self):
@@ -72,6 +73,8 @@ class BaseAcquisition:
 
 
 class BasePlanning:
+    """A base class for all plannings, regardless of their mode."""
+
     acquisitions: List[BaseAcquisition]
     monthly_budget: float
     sum_of_weights: int
@@ -114,6 +117,32 @@ class BasePlanning:
             for acquisition in filter(lambda a: a.request_budget(), self.acquisitions)
         )
 
+    def calculate_acquired_budgets(self):
+        raise NotImplementedError
+
+    def get_earliest_planning_date(self) -> Optional[date]:
+        earliest_start_date = min(
+            [acquisition.start_date for acquisition in self.acquisitions]
+        )
+        earliest_planning_day = date(
+            earliest_start_date.year, earliest_start_date.month, PLANNING_DAY_OF_MONTH
+        )
+        if earliest_start_date == self.today:
+            return None
+        if earliest_planning_day < earliest_start_date:
+            tmp = earliest_planning_day + timedelta(days=32)
+            earliest_planning_day = date(
+                year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH
+            )
+        return earliest_planning_day
+
+    @staticmethod
+    def get_next_planning_date(planning_date: date) -> date:
+        tmp = planning_date + timedelta(days=32)
+        return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
+
+
+class BasePlanningWeightedMonthlyContribution(BasePlanning):
     def allocate_budget(
         self, budget: float, planning_date: date, sum_of_weights_at_planning_date: int
     ):
@@ -162,20 +191,9 @@ class BasePlanning:
         if not self.acquisitions:
             return
         self.allocate_planning_start_budget(self.start_budget)
-        earliest_start_date = min(
-            [acquisition.start_date for acquisition in self.acquisitions]
-        )
-        earliest_planning_day = date(
-            earliest_start_date.year, earliest_start_date.month, PLANNING_DAY_OF_MONTH
-        )
-        if earliest_start_date == self.today:
+        planning_date = self.get_earliest_planning_date()
+        if not planning_date:  # either no planning date at all or just today
             return
-        if earliest_planning_day < earliest_start_date:
-            tmp = earliest_planning_day + timedelta(days=32)
-            earliest_planning_day = date(
-                year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH
-            )
-        planning_date = earliest_planning_day
         self._planning_dates = []
         while planning_date <= self.today:
             self._planning_dates.append(planning_date)
@@ -183,10 +201,68 @@ class BasePlanning:
                 planning_date
             )
             self.allocate_budget(self.monthly_budget, planning_date, sum_of_weights)
-            tmp = planning_date + timedelta(days=32)
-            planning_date = date(
-                year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH
-            )
+            planning_date = BasePlanning.get_next_planning_date(planning_date)
+
+
+class BasePlanningBaseSequentialAcquisition(BasePlanning):
+    def get_acquisition_sequence(self) -> List[BaseAcquisition]:
+        raise NotImplementedError
+
+    def allocate_planning_start_budget(
+        self, acquisition_sequence: List[BaseAcquisition]
+    ):
+        available_budget = self.start_budget
+        acq_count = len(acquisition_sequence)
+        acq_idx = 0
+        while available_budget and acq_idx < acq_count:
+            requested_budget = acquisition_sequence[acq_idx].request_budget()
+            if requested_budget <= available_budget:
+                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
+                available_budget -= requested_budget
+            else:
+                acquisition_sequence[acq_idx].allocate_budget(available_budget)
+                return
+            acq_idx += 1
+
+    def calculate_acquired_budgets(self):
+        acquisition_sequence = self.get_acquisition_sequence()
+        acq_idx = 0
+        acq_count = len(acquisition_sequence)
+        planning_date = self.get_earliest_planning_date()
+        if not planning_date:  # either no planning date at all or just today
+            return
+        self.allocate_planning_start_budget(acquisition_sequence)
+        extra_budget = 0
+        while planning_date <= self.today and acq_idx < acq_count:
+            requested_budget = acquisition_sequence[acq_idx].request_budget()
+            available_budget = self.monthly_budget + extra_budget
+            if requested_budget <= available_budget:
+                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
+                acq_idx += 1
+                extra_budget += available_budget - requested_budget
+            else:
+                acquisition_sequence[acq_idx].allocate_budget(available_budget)
+                extra_budget = 0
+            planning_date = BasePlanning.get_next_planning_date(planning_date)
+
+
+class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
+    def get_acquisition_sequence(self) -> List[BaseAcquisition]:
+        name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
+        budget_sorted = sorted(name_sorted, key=lambda a: a.target_budget)
+        weight_sorted = sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
+        return sorted(
+            weight_sorted, key=lambda a: a.start_date
+        )  # sort by start date, then by weight, then by target budget, then by name as sorted uses a stable sorting algorithm
+
+
+class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
+    def get_acquisition_sequence(self) -> List[BaseAcquisition]:
+        # sort by weight, then budget, then date, then name
+        name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
+        date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
+        budget_sorted = sorted(date_sorted, key=lambda a: a.target_budget)
+        return sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
@@ -288,17 +364,63 @@ class SpreadsheetPlanning(BasePlanning):
         sheet.getCellByPosition(10, 5).setValue(sum_of_acquired_budgets)
 
 
-def CalculateBudgets(*args):
-    planning_without_start_budget = SpreadsheetPlanning(start_budget=0)
+class SpreadsheetPlanningWeightedMonthlyContribution(
+    SpreadsheetPlanning, BasePlanningWeightedMonthlyContribution
+):
+    pass
+
+
+class SpreadsheetPlanningDatedSequentialAcquisition(
+    SpreadsheetPlanning, BasePlanningDatedSequentialAcquisition
+):
+    pass
+
+
+class SpreadsheetPlanningWeightedSequentialAcquisition(
+    SpreadsheetPlanning, BasePlanningWeightedSequentialAcquisition
+):
+    pass
+
+
+class PlanningMode(Enum):
+    WEIGHTED_MONTHLY_CONTRIBUTION = 1
+    DATED_SEQUENTIAL_ACQUISITION = 2
+    WEIGHTED_SEQUENTIAL_ACQUISITION = 3
+
+    @staticmethod
+    def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
+        value = sheet.getCellByPosition(10, 7).getString()
+        if value == "Gewichtete monatliche Allokation":
+            return PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
+        elif value == "Datierte sequenzielle Allokation":
+            return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
+        elif value == "Gewichtete sequenzielle Allokation":
+            return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
+        raise ValueError(f"Unsupported planning mode '{value}'")
+
+
+def calculate_budgets(
+    PlanningType: Type[SpreadsheetPlanning],
+):  # pylint: disable=invalid-name
+    planning_without_start_budget = PlanningType(start_budget=0)
     planning_without_start_budget.calculate_acquired_budgets()
     planning_without_start_budget.write_sum_of_acquired_budgets()
 
-    main_planning = SpreadsheetPlanning()
+    main_planning = PlanningType()
     main_planning.calculate_acquired_budgets()
     main_planning.write_values()
-    main_planning.clear_debug_info()
 
-    # planning.write_debug_info()
+
+def CalculateBudgets(*args):
+    mode = PlanningMode.read_from_spreadsheet()
+    if mode == PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION:
+        calculate_budgets(SpreadsheetPlanningWeightedMonthlyContribution)
+    elif mode == PlanningMode.DATED_SEQUENTIAL_ACQUISITION:
+        calculate_budgets(SpreadsheetPlanningDatedSequentialAcquisition)
+    elif mode == PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION:
+        calculate_budgets(SpreadsheetPlanningWeightedSequentialAcquisition)
+    else:
+        raise ValueError(f"Invalid PlanningMode '{mode}'")
 
 
 g_exportedScripts = (CalculateBudgets,)
