@@ -1,5 +1,5 @@
 from datetime import date, timedelta
-from acquisitions import (
+from finance_macros.acquisitions import (
     BaseAcquisition,
     BasePlanningWeightedMonthlyContribution,
     BasePlanningDatedSequentialAcquisition,
