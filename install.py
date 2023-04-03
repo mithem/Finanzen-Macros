@@ -52,6 +52,6 @@ def link_macros(file_names: List[str]):
         os.symlink(path, os.path.join(macro_dir, file))
 
 
-files = ["acquisitions.py", "set_simulation_date.py"]
+files = ["finance_macros"]
 
 link_macros(files)
