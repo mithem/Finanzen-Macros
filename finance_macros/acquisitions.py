@@ -242,6 +242,28 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
                 return
             acq_idx += 1
 
+    def allocate_budget(
+        self, budget: float, acquisition_sequence: List[BaseAcquisition], acq_idx: int
+    ) -> int:
+        """Allocate budget to all acquisitions in the
+        given sequence (if available) starting at the given index.
+        Return index for currently allocating acquisition.
+        """
+        if budget == 0:
+            return acq_idx
+        acq_count = len(acquisition_sequence)
+        available_budget = budget
+        while acq_idx < acq_count and available_budget:
+            requested_budget = acquisition_sequence[acq_idx].request_budget()
+            if requested_budget > available_budget:
+                acquisition_sequence[acq_idx].allocate_budget(available_budget)
+                available_budget = 0
+            else:
+                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
+                available_budget -= requested_budget
+                acq_idx += 1
+        return acq_idx
+
     def calculate_acquired_budgets(self):
         acquisition_sequence = self.get_acquisition_sequence()
         acq_idx = 0
@@ -250,17 +272,10 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
         if not planning_date:  # either no planning date at all or just today
             return
         self.allocate_planning_start_budget(acquisition_sequence)
-        extra_budget = 0
         while planning_date <= self.today and acq_idx < acq_count:
-            requested_budget = acquisition_sequence[acq_idx].request_budget()
-            available_budget = self.monthly_budget + extra_budget
-            if requested_budget <= available_budget:
-                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
-                acq_idx += 1
-                extra_budget += available_budget - requested_budget
-            else:
-                acquisition_sequence[acq_idx].allocate_budget(available_budget)
-                extra_budget = 0
+            acq_idx = self.allocate_budget(
+                self.monthly_budget, acquisition_sequence, acq_idx
+            )
             planning_date = BasePlanning.get_next_planning_date(planning_date)
 
 
@@ -285,6 +300,25 @@ class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquis
         date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
         budget_sorted = sorted(date_sorted, key=lambda a: a.target_budget)
         return sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
+
+
+class BasePlanningBudgetOrientedSequentialAcquisition(
+    BasePlanningBaseSequentialAcquisition
+):
+    """Planning using the sequential acquisition mode with a priority
+    sequence of `target_budget`, `weight`, `start_date`, `name`."""
+
+    # Whether to allocate by target budgets in ascending or descending order.
+    ascending: bool
+
+    def get_acquisition_sequence(self) -> List[BaseAcquisition]:
+        # sort by budget, then weight, then date, then name
+        name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
+        date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
+        weight_sorted = sorted(date_sorted, key=lambda a: a.weight, reverse=True)
+        return sorted(
+            weight_sorted, key=lambda a: a.target_budget, reverse=not self.ascending
+        )
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
@@ -348,9 +382,7 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
 
     def __init__(self, start_budget: Optional[float] = None):
         acquisitions = SpreadsheetPlanning.get_acquisitions()
-        monthly_budget = (
-            model.getSheets().getByName("Übersicht").getCellByPosition(1, 49).getValue()
-        )
+        monthly_budget = sheet.getCellByPosition(10, 11).getValue()
         self.planning_debug_cell = sheet.getCellByPosition(0, 4)
         today_overwrite_cell = sheet.getCellByPosition(6, 3)
         value = today_overwrite_cell.getString()
@@ -433,12 +465,34 @@ class SpreadsheetPlanningWeightedSequentialAcquisition(
     """Planning with weighted sequential acquisition mode."""
 
 
+class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending(
+    SpreadsheetPlanning, BasePlanningBudgetOrientedSequentialAcquisition
+):
+    """Planning with budget oriented sequential acquisition mode (ascending)."""
+
+    def __init__(self, start_budget: Optional[float] = None):
+        super().__init__(start_budget)
+        self.ascending = True
+
+
+class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending(
+    SpreadsheetPlanning, BasePlanningBudgetOrientedSequentialAcquisition
+):
+    """Planning with budget oriented sequential acquisition mode (descending)."""
+
+    def __init__(self, start_budget: Optional[float] = None):
+        super().__init__(start_budget)
+        self.ascending = False
+
+
 class PlanningMode(Enum):
     """Enum for the different planning modes."""
 
     WEIGHTED_MONTHLY_CONTRIBUTION = 1
     DATED_SEQUENTIAL_ACQUISITION = 2
     WEIGHTED_SEQUENTIAL_ACQUISITION = 3
+    BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING = 4
+    BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING = 5
 
     @staticmethod
     def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
@@ -450,6 +504,10 @@ class PlanningMode(Enum):
             return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
         if value == "Gewichtete sequenzielle Allokation":
             return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
+        if value == "Budgetorientierte sequenzielle Allokation (aufsteigend)":
+            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
+        if value == "Budgetorientierte sequenzielle Allokation (absteigend)":
+            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
         raise ValueError(f"Unsupported planning mode '{value}'")
 
 
@@ -469,14 +527,18 @@ def calculate_budgets(
 def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
     """Calculate the acquired budgets for the planning mode on the spreadsheet."""
     mode = PlanningMode.read_from_spreadsheet()
-    if mode == PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION:
-        calculate_budgets(SpreadsheetPlanningWeightedMonthlyContribution)
-    elif mode == PlanningMode.DATED_SEQUENTIAL_ACQUISITION:
-        calculate_budgets(SpreadsheetPlanningDatedSequentialAcquisition)
-    elif mode == PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION:
-        calculate_budgets(SpreadsheetPlanningWeightedSequentialAcquisition)
-    else:
-        raise ValueError(f"Invalid PlanningMode '{mode}'")
+    mode_map = {
+        PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION: SpreadsheetPlanningWeightedMonthlyContribution,
+        PlanningMode.DATED_SEQUENTIAL_ACQUISITION: SpreadsheetPlanningDatedSequentialAcquisition,
+        PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION: SpreadsheetPlanningWeightedSequentialAcquisition,  # pylint: disable=line-too-long
+        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending,  # pylint: disable=line-too-long
+        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending,  # pylint: disable=line-too-long
+    }
+    for mode_type, planning in mode_map.items():
+        if mode == mode_type:
+            calculate_budgets(planning)
+            return
+    raise ValueError(f"Invalid PlanningMode '{mode}'")
 
 
 g_exportedScripts = (CalculateBudgets,)

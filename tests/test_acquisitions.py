@@ -686,3 +686,39 @@ def test_wsaplanning_get_acquisition_sequence():
     )
     result = planning.get_acquisition_sequence()
     assert result == expected
+
+
+def test_wsaplanning():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=150,
+        start_date=date(2023, 1, 1),
+        weight=1,
+    )
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=100,
+        target_budget=150,
+        start_date=date(2023, 1, 1),
+        weight=3,
+    )
+    ac3 = BaseAcquisition(
+        name="test3",
+        start_budget=0,
+        target_budget=100,
+        start_date=date(2023, 1, 1),
+        weight=2,
+    )
+    today = date(2023, 3, 15)
+    planning = BasePlanningWeightedSequentialAcquisition(
+        acquisitions=[ac1, ac2, ac3],
+        monthly_budget=30,
+        start_budget=0,
+        today=today,
+    )
+    planning.calculate_acquired_budgets()
+    assert ac1.budget_acquired == 50
+    assert ac2.budget_acquired == 150
+    assert ac3.budget_acquired == 40
+    assert _sum_acquired_budgets(ac1, ac2, ac3) == 30 * 3 + 150
