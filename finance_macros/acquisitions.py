@@ -242,6 +242,28 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
                 return
             acq_idx += 1
 
+    def allocate_budget(
+        self, budget: float, acquisition_sequence: List[BaseAcquisition], acq_idx: int
+    ) -> int:
+        """Allocate budget to all acquisitions in the
+        given sequence (if available) starting at the given index.
+        Return index for currently allocating acquisition.
+        """
+        if budget == 0:
+            return acq_idx
+        acq_count = len(acquisition_sequence)
+        available_budget = budget
+        while acq_idx < acq_count and available_budget:
+            requested_budget = acquisition_sequence[acq_idx].request_budget()
+            if requested_budget > available_budget:
+                acquisition_sequence[acq_idx].allocate_budget(available_budget)
+                available_budget = 0
+            else:
+                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
+                available_budget -= requested_budget
+                acq_idx += 1
+        return acq_idx
+
     def calculate_acquired_budgets(self):
         acquisition_sequence = self.get_acquisition_sequence()
         acq_idx = 0
@@ -250,17 +272,10 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
         if not planning_date:  # either no planning date at all or just today
             return
         self.allocate_planning_start_budget(acquisition_sequence)
-        extra_budget = 0
         while planning_date <= self.today and acq_idx < acq_count:
-            requested_budget = acquisition_sequence[acq_idx].request_budget()
-            available_budget = self.monthly_budget + extra_budget
-            if requested_budget <= available_budget:
-                acquisition_sequence[acq_idx].allocate_budget(requested_budget)
-                acq_idx += 1
-                extra_budget += available_budget - requested_budget
-            else:
-                acquisition_sequence[acq_idx].allocate_budget(available_budget)
-                extra_budget = 0
+            acq_idx = self.allocate_budget(
+                self.monthly_budget, acquisition_sequence, acq_idx
+            )
             planning_date = BasePlanning.get_next_planning_date(planning_date)
 
 
