@@ -1,7 +1,5 @@
 # coding: utf-8
 """Acquisition budgeting."""
-from __future__ import unicode_literals
-
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, List, Optional, Type
