@@ -1,7 +1,5 @@
 # coding: utf-8
 """Acquisition budgeting."""
-from __future__ import unicode_literals
-
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, List, Optional, Type
@@ -498,16 +496,17 @@ class PlanningMode(Enum):
     def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
         """Read the planning mode from the spreadsheet."""
         value = sheet.getCellByPosition(10, 7).getString()
-        if value == "Gewichtete monatliche Allokation":
-            return PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
-        if value == "Datierte sequenzielle Allokation":
-            return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
-        if value == "Gewichtete sequenzielle Allokation":
-            return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
-        if value == "Budgetorientierte sequenzielle Allokation (aufsteigend)":
-            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
-        if value == "Budgetorientierte sequenzielle Allokation (absteigend)":
-            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
+        match value:
+            case "Gewichtete monatliche Allokation":
+                return PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
+            case "Datierte sequenzielle Allokation":
+                return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
+            case "Gewichtete sequenzielle Allokation":
+                return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
+            case "Budgetorientierte sequenzielle Allokation (aufsteigend)":
+                return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
+            case "Budgetorientierte sequenzielle Allokation (absteigend)":
+                return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
         raise ValueError(f"Unsupported planning mode '{value}'")
 
 
