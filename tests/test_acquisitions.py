@@ -1,9 +1,11 @@
 from datetime import date, timedelta
+
 from finance_macros.acquisitions import (
     BaseAcquisition,
     BasePlanningWeightedMonthlyContribution,
     BasePlanningDatedSequentialAcquisition,
     BasePlanningWeightedSequentialAcquisition,
+    BasePlanningEgalitarianDistribution,
 )
 
 
@@ -538,11 +540,11 @@ def test_wmcplanning_end_to_end_simple():
     assert acquisition1.start_budget == 50
     assert acquisition2.start_budget == 100
     assert (
-        _sum_acquired_budgets(acquisition1, acquisition2)
-        == acquisition1.start_budget
-        + acquisition2.start_budget
-        + planning.start_budget
-        + 50 * 4
+            _sum_acquired_budgets(acquisition1, acquisition2)
+            == acquisition1.start_budget
+            + acquisition2.start_budget
+            + planning.start_budget
+            + 50 * 4
     )
 
 
@@ -638,12 +640,12 @@ def test_dsaplanning():
     assert ac2.start_budget == 100
     assert ac3.start_budget == 0
     assert (
-        _sum_acquired_budgets(ac1, ac2)
-        == ac1.start_budget
-        + ac2.start_budget
-        + ac3.start_budget
-        + planning.start_budget
-        + 100 * 4
+            _sum_acquired_budgets(ac1, ac2)
+            == ac1.start_budget
+            + ac2.start_budget
+            + ac3.start_budget
+            + planning.start_budget
+            + 100 * 4
     )
 
 
@@ -722,3 +724,75 @@ def test_wsaplanning():
     assert ac2.budget_acquired == 150
     assert ac3.budget_acquired == 40
     assert _sum_acquired_budgets(ac1, ac2, ac3) == 30 * 3 + 150
+
+
+def test_egalitarian_distribution():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=90,
+        start_date=date(2023, 1, 1),
+        weight=1,
+    )
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=0,
+        target_budget=500,
+        start_date=date(2023, 2, 1),
+        weight=2,
+    )
+    ac3 = BaseAcquisition(
+        name="test3",
+        start_budget=0,
+        target_budget=100,
+        start_date=date(2023, 3, 1),
+        weight=3,
+    )
+    today = date(2023, 3, 15)
+    planning = BasePlanningEgalitarianDistribution(
+        acquisitions=[ac1, ac2, ac3],
+        monthly_budget=30,
+        start_budget=60,
+        today=today,
+    )
+    planning.calculate_acquired_budgets()
+
+    assert_round(ac1.budget_acquired, 90)
+    assert_round(ac2.budget_acquired, 55)
+    assert_round(ac3.budget_acquired, 55)
+
+
+def test_egalitarian_distribution_2():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=60,
+        start_date=date(2023, 1, 1),
+        weight=1,
+    )
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=0,
+        target_budget=20,
+        start_date=date(2023, 2, 1),
+        weight=2,
+    )
+    ac3 = BaseAcquisition(
+        name="test3",
+        start_budget=0,
+        target_budget=30,
+        start_date=date(2023, 3, 1),
+        weight=3,
+    )
+    today = date(2023, 3, 15)
+    planning = BasePlanningEgalitarianDistribution(
+        acquisitions=[ac1, ac2, ac3],
+        monthly_budget=30,
+        start_budget=60,
+        today=today,
+    )
+    planning.calculate_acquired_budgets()
+
+    assert_round(ac1.budget_acquired, 60)
+    assert_round(ac2.budget_acquired, 20)
+    assert_round(ac3.budget_acquired, 30)
