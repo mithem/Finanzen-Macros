@@ -2,7 +2,7 @@
 """Acquisition budgeting."""
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, List, Optional, Type
+from typing import Any, List, Optional, Type, Callable
 
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
@@ -143,8 +143,17 @@ class BasePlanning:
             )
         return earliest_planning_day
 
-    @staticmethod
-    def get_next_planning_date(planning_date: date) -> date:
+    def call_at_each_planning_date(self, callback: Callable[[date], None]):
+        planning_date = self.get_earliest_planning_date()
+        if not planning_date:  # either no planning date at all or just today
+            return
+        self._planning_dates = []
+        while planning_date <= self.today:
+            self._planning_dates.append(planning_date)
+            callback(planning_date)
+            planning_date = self.get_next_planning_date(planning_date)
+
+    def get_next_planning_date(self, planning_date: date) -> date:
         """Return the next planning date after the given planning date."""
         tmp = planning_date + timedelta(days=32)
         return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
@@ -199,21 +208,14 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
         if extra_budget:
             self.allocate_planning_start_budget(extra_budget)
 
+
     def calculate_acquired_budgets(self):
+        def monthly_allocation(planning_date: date):
+            self.allocate_budget(self.monthly_budget, planning_date, self.sum_of_relevant_weights_at_planning_date(planning_date))
         if not self.acquisitions:
             return
         self.allocate_planning_start_budget(self.start_budget)
-        planning_date = self.get_earliest_planning_date()
-        if not planning_date:  # either no planning date at all or just today
-            return
-        self._planning_dates = []
-        while planning_date <= self.today:
-            self._planning_dates.append(planning_date)
-            sum_of_weights = self.sum_of_relevant_weights_at_planning_date(
-                planning_date
-            )
-            self.allocate_budget(self.monthly_budget, planning_date, sum_of_weights)
-            planning_date = BasePlanning.get_next_planning_date(planning_date)
+        self.call_at_each_planning_date(monthly_allocation)
 
 
 class BasePlanningBaseSequentialAcquisition(BasePlanning):
@@ -274,7 +276,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
             acq_idx = self.allocate_budget(
                 self.monthly_budget, acquisition_sequence, acq_idx
             )
-            planning_date = BasePlanning.get_next_planning_date(planning_date)
+            planning_date = self.get_next_planning_date(planning_date)
 
 
 class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
@@ -317,6 +319,30 @@ class BasePlanningBudgetOrientedSequentialAcquisition(
         return sorted(
             weight_sorted, key=lambda a: a.target_budget, reverse=not self.ascending
         )
+
+class BasePlanningEgalitarianDistribution(BasePlanning):
+    def allocate_budget(self, budget: float):
+        relevant_acquisitions = list(filter(lambda a: a.request_budget(), self.acquisitions))
+        if not relevant_acquisitions:
+            return
+        available = budget / len(relevant_acquisitions)
+        extra_budget = 0
+        for acq in relevant_acquisitions:
+            requested = acq.request_budget()
+            if requested >= available:
+                acq.allocate_budget(available)
+            else:
+                acq.allocate_budget(requested)
+                extra_budget += available - requested
+        if extra_budget and sum(map(lambda a: a.request_budget(), self.acquisitions)):
+            self.allocate_budget(extra_budget)
+
+    def calculate_acquired_budgets(self):
+        def monthly_allocation(planning_date: date):
+            self.allocate_budget(self.monthly_budget)
+
+        self.allocate_budget(self.start_budget)
+        self.call_at_each_planning_date(monthly_allocation)
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
@@ -482,6 +508,11 @@ class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending(
         super().__init__(start_budget)
         self.ascending = False
 
+class SpreadsheetPlanningEgalitarianDistribution(
+    SpreadsheetPlanning, BasePlanningEgalitarianDistribution
+):
+    """Planning with egalitarian distribution mode."""
+
 
 class PlanningMode(Enum):
     """Enum for the different planning modes."""
@@ -491,6 +522,7 @@ class PlanningMode(Enum):
     WEIGHTED_SEQUENTIAL_ACQUISITION = 3
     BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING = 4
     BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING = 5
+    EGALITARIAN_DISTRIBUTION = 6
 
     @staticmethod
     def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
@@ -506,6 +538,8 @@ class PlanningMode(Enum):
             return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
         if value == "Budgetorientierte sequenzielle Allokation (absteigend)":
             return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
+        if value == "Egalitäre Verteilung":
+            return PlanningMode.EGALITARIAN_DISTRIBUTION
         raise ValueError(f"Unsupported planning mode '{value}'")
 
 
@@ -531,6 +565,7 @@ def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
         PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION: SpreadsheetPlanningWeightedSequentialAcquisition,  # pylint: disable=line-too-long
         PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending,  # pylint: disable=line-too-long
         PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending,  # pylint: disable=line-too-long
+        PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution
     }
     for mode_type, planning in mode_map.items():
         if mode == mode_type:
