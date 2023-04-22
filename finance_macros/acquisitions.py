@@ -7,17 +7,10 @@ from typing import Any, List, Optional, Type, Callable
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
 # {column_name: (attribute_name, data_type, column_index)}
-COLUMNS = {
-    "Name": ("name", str, 0),
-    "Startdatum": ("start_date", date, 1),
-    "Startbudget": ("start_budget", float, 2),
-    "Zielbudget": ("target_budget", float, 3),
-    "Davon allokiert": ("budget_acquired", float, 4),
-    "Entsprechend verfügbar": None,
-    "Anteil": None,
-    "Gewichtung": ("weight", int, 7),
-    "Debug": (None, str, 8),
-}
+COLUMNS = {"Name": ("name", str, 0), "Startdatum": ("start_date", date, 1),
+           "Startbudget": ("start_budget", float, 2), "Zielbudget": ("target_budget", float, 3),
+           "Davon allokiert": ("budget_acquired", float, 4), "Entsprechend verfügbar": None,
+           "Anteil": None, "Gewichtung": ("weight", int, 7), "Debug": (None, str, 8), }
 PLANNING_DAY_OF_MONTH = 1
 LIBRE_OFFICE_DATE_FORMAT = "%d.%m.%y"
 
@@ -39,14 +32,9 @@ class BaseAcquisition:
     start_date: date
     weight: int
 
-    def __init__(
-        self,
-        name: str,
-        start_budget: float,
-        target_budget: float,
-        start_date: date,
-        weight: int,
-    ):  # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments
+    def __init__(self, name: str, start_budget: float, target_budget: float, start_date: date,
+                 weight: int, ):
         self.name = name
         self.start_budget = start_budget
         self.target_budget = target_budget
@@ -88,18 +76,11 @@ class BasePlanning:
     today: date  # for testing
     _planning_dates: List[date]
 
-    def __init__(
-        self,
-        acquisitions: List[BaseAcquisition],
-        monthly_budget: float,
-        start_budget: float,
-        today: Optional[date] = None,
-    ):
+    def __init__(self, acquisitions: List[BaseAcquisition], monthly_budget: float,
+                 start_budget: float, today: Optional[date] = None, ):
         self.acquisitions = acquisitions
         self.monthly_budget = monthly_budget
-        self.sum_of_weights = sum(
-            acquisition.weight for acquisition in self.acquisitions
-        )
+        self.sum_of_weights = sum(acquisition.weight for acquisition in self.acquisitions)
         self.start_budget = start_budget
         self.today = today or date.today()
         self._planning_dates = []
@@ -107,20 +88,14 @@ class BasePlanning:
     def sum_of_relevant_weights_at_planning_date(self, planning_date: date):
         """Return the sum of weights of all acquisitions that are relevant
         for the given planning date."""
-        return sum(
-            acquisition.weight
-            for acquisition in filter(
-                lambda a: a.start_date <= planning_date and a.request_budget(),
-                self.acquisitions,
-            )
-        )
+        return sum(acquisition.weight for acquisition in
+                   filter(lambda a: a.start_date <= planning_date and a.request_budget(),
+                          self.acquisitions, ))
 
     def sum_of_relevant_weights(self):
         """Return the sum of weights of all acquisitions that are relevant"""
-        return sum(
-            acquisition.weight
-            for acquisition in filter(lambda a: a.request_budget(), self.acquisitions)
-        )
+        return sum(acquisition.weight for acquisition in
+                   filter(lambda a: a.request_budget(), self.acquisitions))
 
     def calculate_acquired_budgets(self):
         """Calculate the acquired budgets for all acquisitions at the `today` date."""
@@ -128,22 +103,18 @@ class BasePlanning:
 
     def get_earliest_planning_date(self) -> Optional[date]:
         """Return the earliest relevant planning date for this planning."""
-        earliest_start_date = min(
-            acquisition.start_date for acquisition in self.acquisitions
-        )
-        earliest_planning_day = date(
-            earliest_start_date.year, earliest_start_date.month, PLANNING_DAY_OF_MONTH
-        )
+        earliest_start_date = min(acquisition.start_date for acquisition in self.acquisitions)
+        earliest_planning_day = date(earliest_start_date.year, earliest_start_date.month,
+                                     PLANNING_DAY_OF_MONTH)
         if earliest_start_date == self.today:
             return None
         if earliest_planning_day < earliest_start_date:
             tmp = earliest_planning_day + timedelta(days=32)
-            earliest_planning_day = date(
-                year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH
-            )
+            earliest_planning_day = date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
         return earliest_planning_day
 
     def call_at_each_planning_date(self, callback: Callable[[date], None]):
+        """Call the given callback at each planning date until today."""
         planning_date = self.get_earliest_planning_date()
         if not planning_date:  # either no planning date at all or just today
             return
@@ -162,9 +133,8 @@ class BasePlanning:
 class BasePlanningWeightedMonthlyContribution(BasePlanning):
     """Class for all plannings using the weighted monthly contribution mode."""
 
-    def allocate_budget(
-        self, budget: float, planning_date: date, sum_of_weights_at_planning_date: int
-    ):
+    def allocate_budget(self, budget: float, planning_date: date,
+                        sum_of_weights_at_planning_date: int):
         """Allocate budget to all acquisitions that are relevant for the given planning date."""
         if budget == 0:
             return
@@ -174,20 +144,15 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
                 continue
             requested_budget = acquisition.request_budget()
             if requested_budget > 0:
-                available_budget = (
-                    budget * acquisition.weight / sum_of_weights_at_planning_date
-                )
+                available_budget = budget * acquisition.weight / sum_of_weights_at_planning_date
                 budget_to_allocate = min(available_budget, requested_budget)
                 acquisition.allocate_budget(budget_to_allocate)
                 extra_budget += available_budget - budget_to_allocate
         if extra_budget:
-            self.allocate_budget(
-                extra_budget,
-                planning_date,
-                # needs to be recalculated if extra_budget is available as some acquisition is fully
-                # funded and therefore doesn't apply anymore
-                self.sum_of_relevant_weights_at_planning_date(planning_date),
-            )
+            # needs to be recalculated if extra_budget is available as some acquisition is fully
+            # funded and therefore doesn't apply anymore
+            self.allocate_budget(extra_budget, planning_date,
+                                 self.sum_of_relevant_weights_at_planning_date(planning_date))
 
     def allocate_planning_start_budget(self, budget: float):
         """Allocate the planning's start budget to all acquisitions, depending on their weight."""
@@ -208,10 +173,11 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
         if extra_budget:
             self.allocate_planning_start_budget(extra_budget)
 
-
     def calculate_acquired_budgets(self):
         def monthly_allocation(planning_date: date):
-            self.allocate_budget(self.monthly_budget, planning_date, self.sum_of_relevant_weights_at_planning_date(planning_date))
+            self.allocate_budget(self.monthly_budget, planning_date,
+                                 self.sum_of_relevant_weights_at_planning_date(planning_date))
+
         if not self.acquisitions:
             return
         self.allocate_planning_start_budget(self.start_budget)
@@ -225,9 +191,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
         """Return the sequence acquisitions should be acquired in."""
         raise NotImplementedError
 
-    def allocate_planning_start_budget(
-        self, acquisition_sequence: List[BaseAcquisition]
-    ):
+    def allocate_planning_start_budget(self, acquisition_sequence: List[BaseAcquisition]):
         """Allocate the planning's start budget to all acquisitions in the given sequence."""
         available_budget = self.start_budget
         acq_count = len(acquisition_sequence)
@@ -242,9 +206,8 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
                 return
             acq_idx += 1
 
-    def allocate_budget(
-        self, budget: float, acquisition_sequence: List[BaseAcquisition], acq_idx: int
-    ) -> int:
+    def allocate_budget(self, budget: float, acquisition_sequence: List[BaseAcquisition],
+                        acq_idx: int) -> int:
         """Allocate budget to all acquisitions in the
         given sequence (if available) starting at the given index.
         Return index for currently allocating acquisition.
@@ -273,9 +236,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
             return
         self.allocate_planning_start_budget(acquisition_sequence)
         while planning_date <= self.today and acq_idx < acq_count:
-            acq_idx = self.allocate_budget(
-                self.monthly_budget, acquisition_sequence, acq_idx
-            )
+            acq_idx = self.allocate_budget(self.monthly_budget, acquisition_sequence, acq_idx)
             planning_date = self.get_next_planning_date(planning_date)
 
 
@@ -302,9 +263,7 @@ class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquis
         return sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
 
 
-class BasePlanningBudgetOrientedSequentialAcquisition(
-    BasePlanningBaseSequentialAcquisition
-):
+class BasePlanningBudgetOrientedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
     """Planning using the sequential acquisition mode with a priority
     sequence of `target_budget`, `weight`, `start_date`, `name`."""
 
@@ -316,12 +275,15 @@ class BasePlanningBudgetOrientedSequentialAcquisition(
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
         date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
         weight_sorted = sorted(date_sorted, key=lambda a: a.weight, reverse=True)
-        return sorted(
-            weight_sorted, key=lambda a: a.target_budget, reverse=not self.ascending
-        )
+        return sorted(weight_sorted, key=lambda a: a.target_budget, reverse=not self.ascending)
+
 
 class BasePlanningEgalitarianDistribution(BasePlanning):
+    """Planning mode that distributes the budget equally among all acquisitions, regardless of
+    start_date, budget, weight, etc."""
+
     def allocate_budget(self, budget: float):
+        """Allocate budget to all acquisitions in the planning equally."""
         relevant_acquisitions = list(filter(lambda a: a.request_budget(), self.acquisitions))
         if not relevant_acquisitions:
             return
@@ -338,7 +300,7 @@ class BasePlanningEgalitarianDistribution(BasePlanning):
             self.allocate_budget(extra_budget)
 
     def calculate_acquired_budgets(self):
-        def monthly_allocation(planning_date: date):
+        def monthly_allocation(_):
             self.allocate_budget(self.monthly_budget)
 
         self.allocate_budget(self.start_budget)
@@ -380,22 +342,22 @@ class SpreadsheetAcquisition(BaseAcquisition):
 
     def write_values(self):
         """Write the relevant values of this acquisition to the spreadsheet."""
+
         budget_acquired_cell = sheet.getCellByPosition(
-            COLUMNS["Davon allokiert"][2], self.row  # type: ignore
+            COLUMNS["Davon allokiert"][2],  # type: ignore
+            self.row
         )
         budget_acquired_cell.setValue(self.budget_acquired)
 
     def clear_debug_info(self):
         """Clear the debug info of this acquisition from the spreadsheet."""
         sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString(  # type: ignore
-            ""
-        )
+            "")
 
     def write_debug_info(self):
         """Write the debug info of this acquisition to the spreadsheet."""
         sheet.getCellByPosition(COLUMNS["Debug"][2], self.row).setString(  # type: ignore
-            str(self)
-        )
+            str(self))
 
 
 class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
@@ -448,15 +410,8 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
             acquisition.write_debug_info()
 
         planning_dates = (
-            "["
-            + ", ".join(
-                map(
-                    lambda d: str(d),  # pylint: disable=unnecessary-lambda
-                    self._planning_dates,
-                )
-            )
-            + "]"
-        )
+                "[" + ", ".join(map(lambda d: str(d),  # pylint: disable=unnecessary-lambda
+                                    self._planning_dates, )) + "]")
         debug_info = f"Planning(monthly_budget={self.monthly_budget}, \
 sum_of_weights={self.sum_of_weights}, \
 months={len(self._planning_dates)}, \
@@ -466,31 +421,28 @@ planning_dates={planning_dates})"
     def write_sum_of_acquired_budgets(self):
         """Write the sum of acquired budgets to the spreadsheet."""
         sum_of_acquired_budgets = sum(
-            acquisition.budget_acquired for acquisition in self.acquisitions
-        )
+            acquisition.budget_acquired for acquisition in self.acquisitions)
         sheet.getCellByPosition(10, 5).setValue(sum_of_acquired_budgets)
 
 
-class SpreadsheetPlanningWeightedMonthlyContribution(
-    SpreadsheetPlanning, BasePlanningWeightedMonthlyContribution
-):
+class SpreadsheetPlanningWeightedMonthlyContribution(SpreadsheetPlanning,
+                                                     BasePlanningWeightedMonthlyContribution):
     """Planning with weighted monthly contribution mode."""
 
 
-class SpreadsheetPlanningDatedSequentialAcquisition(
-    SpreadsheetPlanning, BasePlanningDatedSequentialAcquisition
-):
+class SpreadsheetPlanningDatedSequentialAcquisition(SpreadsheetPlanning,
+                                                    BasePlanningDatedSequentialAcquisition):
     """Planning with dated sequential acquisition mode."""
 
 
-class SpreadsheetPlanningWeightedSequentialAcquisition(
-    SpreadsheetPlanning, BasePlanningWeightedSequentialAcquisition
-):
+class SpreadsheetPlanningWeightedSequentialAcquisition(SpreadsheetPlanning,
+                                                       BasePlanningWeightedSequentialAcquisition):
     """Planning with weighted sequential acquisition mode."""
 
 
 class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending(
-    SpreadsheetPlanning, BasePlanningBudgetOrientedSequentialAcquisition
+    SpreadsheetPlanning,
+    BasePlanningBudgetOrientedSequentialAcquisition
 ):
     """Planning with budget oriented sequential acquisition mode (ascending)."""
 
@@ -500,7 +452,8 @@ class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending(
 
 
 class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending(
-    SpreadsheetPlanning, BasePlanningBudgetOrientedSequentialAcquisition
+    SpreadsheetPlanning,
+    BasePlanningBudgetOrientedSequentialAcquisition
 ):
     """Planning with budget oriented sequential acquisition mode (descending)."""
 
@@ -508,9 +461,9 @@ class SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending(
         super().__init__(start_budget)
         self.ascending = False
 
-class SpreadsheetPlanningEgalitarianDistribution(
-    SpreadsheetPlanning, BasePlanningEgalitarianDistribution
-):
+
+class SpreadsheetPlanningEgalitarianDistribution(SpreadsheetPlanning,
+                                                 BasePlanningEgalitarianDistribution):
     """Planning with egalitarian distribution mode."""
 
 
@@ -543,9 +496,7 @@ class PlanningMode(Enum):
         raise ValueError(f"Unsupported planning mode '{value}'")
 
 
-def calculate_budgets(
-    PlanningType: Type[SpreadsheetPlanning],
-):  # pylint: disable=invalid-name
+def calculate_budgets(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
     """Calculate the acquired budgets for the given planning mode."""
     planning_without_start_budget = PlanningType(start_budget=0)
     planning_without_start_budget.calculate_acquired_budgets()
@@ -562,11 +513,13 @@ def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
     mode_map = {
         PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION: SpreadsheetPlanningWeightedMonthlyContribution,
         PlanningMode.DATED_SEQUENTIAL_ACQUISITION: SpreadsheetPlanningDatedSequentialAcquisition,
-        PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION: SpreadsheetPlanningWeightedSequentialAcquisition,  # pylint: disable=line-too-long
-        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending,  # pylint: disable=line-too-long
-        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING: SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending,  # pylint: disable=line-too-long
-        PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution
-    }
+        PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION:
+            SpreadsheetPlanningWeightedSequentialAcquisition,
+        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING:
+            SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending,
+        PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING:
+            SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending,
+        PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution}
     for mode_type, planning in mode_map.items():
         if mode == mode_type:
             calculate_budgets(planning)
