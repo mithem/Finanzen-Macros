@@ -3,6 +3,7 @@ import datetime
 
 DATE_COLUMN = 4
 NET_WORTH_COLUMN = 5
+DEPOT_VALUE_COLUMN = 6
 DATE_FORMAT = "%d.%m.%Y"
 
 # mypy: ignore-errors
@@ -25,6 +26,8 @@ def SnapshotNetWorth(*args):  # pylint: disable=invalid-name,unused-argument
 
     today = datetime.date.today()
     current_net_worth = sheet.getCellByPosition(NET_WORTH_COLUMN, 49).getValue()
+    current_depot_value = sheet.getCellByPosition(5, 50).getValue()
 
     sheet.getCellByPosition(DATE_COLUMN, row).setString(today.strftime(DATE_FORMAT))
     sheet.getCellByPosition(NET_WORTH_COLUMN, row).setValue(current_net_worth)
+    sheet.getCellByPosition(DEPOT_VALUE_COLUMN, row).setValue(current_depot_value)
