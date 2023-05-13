@@ -796,3 +796,38 @@ def test_egalitarian_distribution_2():
     assert_round(ac1.budget_acquired, 60)
     assert_round(ac2.budget_acquired, 20)
     assert_round(ac3.budget_acquired, 30)
+
+
+def test_acquisition_does_not_request_budget_when_weight_is_0():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=60,
+        start_date=date(2023, 1, 1),
+        weight=1,
+    )
+    assert ac1.request_budget() == 10
+
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=50,
+        target_budget=100,
+        start_date=date(2023, 1, 1),
+        weight=0,
+    )
+    assert ac2.request_budget() == 0
+
+
+def test_planning_does_not_allocate_to_acquisitions_with_weight_0():
+    a1 = ac("a", 1000, 1, 1)
+    a2 = ac("b", 1000, 1, 1)
+    a3 = ac("c", 1000, 0, 3)
+    a4 = ac("d", 1000, 5, 1)
+
+    planning = BasePlanningEgalitarianDistribution([a1, a2, a3, a4], 90, 0, date(2023, 2, 1))
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 30
+    assert a2.budget_acquired == 30
+    assert a3.budget_acquired == 0
+    assert a4.budget_acquired == 30
