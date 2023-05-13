@@ -44,6 +44,8 @@ class BaseAcquisition:
 
     def request_budget(self):
         """Return the amount of budget that is still needed to reach the target budget."""
+        if self.weight == 0:
+            return 0
         return self.target_budget - self.budget_acquired
 
     def allocate_budget(self, budget: float):
