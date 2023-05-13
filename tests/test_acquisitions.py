@@ -816,3 +816,18 @@ def test_acquisition_does_not_request_budget_when_weight_is_0():
         weight=0,
     )
     assert ac2.request_budget() == 0
+
+
+def test_planning_does_not_allocate_to_acquisitions_with_weight_0():
+    a1 = ac("a", 1000, 1, 1)
+    a2 = ac("b", 1000, 1, 1)
+    a3 = ac("c", 1000, 0, 3)
+    a4 = ac("d", 1000, 5, 1)
+
+    planning = BasePlanningEgalitarianDistribution([a1, a2, a3, a4], 90, 0, date(2023, 2, 1))
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 30
+    assert a2.budget_acquired == 30
+    assert a3.budget_acquired == 0
+    assert a4.budget_acquired == 30
