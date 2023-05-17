@@ -1,6 +1,5 @@
 # coding: utf-8
 """Set the planning simulation date in the spreadsheet."""
-from __future__ import unicode_literals
 import datetime
 
 # pylint: disable=undefined-variable
@@ -26,29 +25,29 @@ def _set_to_date_in_months(months: int):
     SIMULATION_DATE_CELL.setString(string)
 
 
-def SetDateToToday(*args):  # pylint: disable=invalid-name,unused-argument
+def set_date_to_today(*args):  # pylint: disable=invalid-name,unused-argument
     """Set the simulation date to today."""
     _set_to_date_in_months(0)
 
 
-def SetDateToInThreeMonths(*args):  # pylint: disable=invalid-name,unused-argument
+def set_date_to_in_three_months(*args):  # pylint: disable=invalid-name,unused-argument
     """Set the simulation date to three months from now."""
     _set_to_date_in_months(3)
 
 
-def SetDateToInSixMonths(*args):  # pylint: disable=invalid-name,unused-argument
+def set_date_to_in_six_months(*args):  # pylint: disable=invalid-name,unused-argument
     """Set the simulation date to six months from now."""
     _set_to_date_in_months(6)
 
 
-def SetDateToInAYear(*args):  # pylint: disable=invalid-name,unused-argument
+def set_date_to_in_a_year(*args):  # pylint: disable=invalid-name,unused-argument
     """Set the simulation date to a year from now."""
     _set_to_date_in_months(12)
 
 
 g_exportedScript = (
-    SetDateToToday,
-    SetDateToInThreeMonths,
-    SetDateToInSixMonths,
-    SetDateToInAYear,
+    set_date_to_today,
+    set_date_to_in_three_months,
+    set_date_to_in_six_months,
+    set_date_to_in_a_year,
 )

@@ -498,7 +498,7 @@ class PlanningMode(Enum):
         raise ValueError(f"Unsupported planning mode '{value}'")
 
 
-def calculate_budgets(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
+def _calculate_budgets_of_type(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
     """Calculate the acquired budgets for the given planning mode."""
     planning_without_start_budget = PlanningType(start_budget=0)
     planning_without_start_budget.calculate_acquired_budgets()
@@ -509,7 +509,7 @@ def calculate_budgets(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: dis
     main_planning.write_values()
 
 
-def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
+def calculate_budgets(*args):  # pylint: disable=invalid-name,unused-argument
     """Calculate the acquired budgets for the planning mode on the spreadsheet."""
     mode = PlanningMode.read_from_spreadsheet()
     mode_map = {
@@ -524,9 +524,9 @@ def CalculateBudgets(*args):  # pylint: disable=invalid-name,unused-argument
         PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution}
     for mode_type, planning in mode_map.items():
         if mode == mode_type:
-            calculate_budgets(planning)
+            _calculate_budgets_of_type(planning)
             return
     raise ValueError(f"Invalid PlanningMode '{mode}'")
 
 
-g_exportedScripts = (CalculateBudgets,)
+g_exportedScripts = (calculate_budgets,)
