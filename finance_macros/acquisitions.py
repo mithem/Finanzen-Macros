@@ -2,15 +2,16 @@
 """Acquisition budgeting."""
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import Any, List, Optional, Type, Callable
+from typing import List, Optional, Type, Callable, Any
 
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
 # {column_name: (attribute_name, data_type, column_index)}
 COLUMNS = {"Name": ("name", str, 0), "Startdatum": ("start_date", date, 1),
-           "Startbudget": ("start_budget", float, 2), "Zielbudget": ("target_budget", float, 3),
-           "Davon allokiert": ("budget_acquired", float, 4), "Entsprechend verfügbar": None,
-           "Anteil": None, "Gewichtung": ("weight", int, 7), "Debug": (None, str, 8), }
+           "Zieldatum": ("target_date", Optional[date], 2),
+           "Startbudget": ("start_budget", float, 3), "Zielbudget": ("target_budget", float, 4),
+           "Davon allokiert": ("budget_acquired", float, 5), "Entsprechend verfügbar": None,
+           "Anteil": None, "Gewichtung": ("weight", int, 8), "Debug": (None, str, 9), }
 PLANNING_DAY_OF_MONTH = 1
 LIBRE_OFFICE_DATE_FORMAT = "%d.%m.%y"
 
@@ -18,8 +19,19 @@ try:
     desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
     model = desktop.getCurrentComponent()
     sheet = model.getSheets().getByName("Anschaffungen")
+
+    PLANNING_MODE_CELL = sheet.getCellByPosition(12, 7)
+    TODAY_OVERWRITE_CELL = sheet.getCellByPosition(6, 3)
+    MONTHLY_BUDGET_CELL = sheet.getCellByPosition(12, 11)
+    START_BUDGET_CELL = sheet.getCellByPosition(13, 3)
 except NameError:
     pass  # running tests
+
+
+def _get_next_planning_date(planning_date: date) -> date:
+    """Return the next planning date after the given planning date."""
+    tmp = planning_date + timedelta(days=32)
+    return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
 
 
 class BaseAcquisition:
@@ -30,16 +42,19 @@ class BaseAcquisition:
     target_budget: float
     budget_acquired: float
     start_date: date
+    target_date: Optional[date]
     weight: int
 
     # pylint: disable=too-many-arguments
     def __init__(self, name: str, start_budget: float, target_budget: float, start_date: date,
+                 target_date: Optional[date],
                  weight: int, ):
         self.name = name
         self.start_budget = start_budget
         self.target_budget = target_budget
         self.budget_acquired = self.start_budget
         self.start_date = start_date
+        self.target_date = target_date
         self.weight = weight
 
     def request_budget(self):
@@ -57,11 +72,23 @@ class BaseAcquisition:
 budget_acquired={self.budget_acquired}, \
 start_date={self.start_date}, \
 start_budget={self.start_budget}, \
+target_date={self.target_date}, \
 target_budget={self.target_budget}, \
 weight={self.weight})"
 
     def __repr__(self):
         return str(self)
+
+    def planning_dates_until_target_date(self) -> Optional[int]:
+        """Return the number of planning dates until the target date."""
+        if not self.target_date:
+            return None
+        counter = 0
+        planning_date = self.start_date
+        while planning_date < self.target_date:
+            counter += 1
+            planning_date = _get_next_planning_date(planning_date)
+        return counter
 
 
 class BasePlanning:
@@ -124,12 +151,7 @@ class BasePlanning:
         while planning_date <= self.today:
             self._planning_dates.append(planning_date)
             callback(planning_date)
-            planning_date = self.get_next_planning_date(planning_date)
-
-    def get_next_planning_date(self, planning_date: date) -> date:
-        """Return the next planning date after the given planning date."""
-        tmp = planning_date + timedelta(days=32)
-        return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
+            planning_date = _get_next_planning_date(planning_date)
 
 
 class BasePlanningWeightedMonthlyContribution(BasePlanning):
@@ -239,7 +261,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
         self.allocate_planning_start_budget(acquisition_sequence)
         while planning_date <= self.today and acq_idx < acq_count:
             acq_idx = self.allocate_budget(self.monthly_budget, acquisition_sequence, acq_idx)
-            planning_date = self.get_next_planning_date(planning_date)
+            planning_date = _get_next_planning_date(planning_date)
 
 
 class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
@@ -309,6 +331,32 @@ class BasePlanningEgalitarianDistribution(BasePlanning):
         self.call_at_each_planning_date(monthly_allocation)
 
 
+class BasePlanningTargetDate(BasePlanning):
+    """Planning mode that allocates budgets in a way
+    that the target budget is reached at the target date."""
+
+    def allocate_budget(self, budget: float):
+        """Allocate a one-time budget (e.g. of a month or a starting budget)."""
+        remaining_budget = budget
+        acquisitions = sorted(self.acquisitions, key=lambda a: a.weight, reverse=True)
+        for acq in acquisitions:
+            requested = acq.request_budget()
+            num_planning_dates = acq.planning_dates_until_target_date()
+            if num_planning_dates is None or num_planning_dates == 0:
+                num_planning_dates = 1
+            to_allocate = min(
+                (acq.target_budget - acq.start_budget) / num_planning_dates,
+                requested,
+                remaining_budget
+            )
+            acq.allocate_budget(to_allocate)
+            remaining_budget -= to_allocate
+
+    def calculate_acquired_budgets(self):
+        self.allocate_budget(self.start_budget)
+        self.call_at_each_planning_date(lambda _: self.allocate_budget(self.monthly_budget))
+
+
 class SpreadsheetAcquisition(BaseAcquisition):
     """Class for acquisitions read from the spreadsheet."""
 
@@ -330,7 +378,7 @@ class SpreadsheetAcquisition(BaseAcquisition):
     def extract_value(cell, expected_type):
         """Extract the value from the given cell, converting it to the
         `expected_type` if necessary."""
-        if expected_type in (str, date):
+        if expected_type in (str, date, Optional[date]):
             value = cell.getString()
         else:
             value = cell.getValue()
@@ -340,6 +388,8 @@ class SpreadsheetAcquisition(BaseAcquisition):
             return float(value)
         if expected_type == date:
             return datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
+        if expected_type == Optional[date]:
+            return datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date() if value else None
         return value
 
     def write_values(self):
@@ -370,15 +420,14 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
 
     def __init__(self, start_budget: Optional[float] = None):
         acquisitions = SpreadsheetPlanning.get_acquisitions()
-        monthly_budget = sheet.getCellByPosition(10, 11).getValue()
+        monthly_budget = MONTHLY_BUDGET_CELL.getValue()
         self.planning_debug_cell = sheet.getCellByPosition(0, 4)
-        today_overwrite_cell = sheet.getCellByPosition(6, 3)
-        value = today_overwrite_cell.getString()
+        value = TODAY_OVERWRITE_CELL.getString()
         today: Optional[date] = None
         if value:
             today = datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
         if start_budget is None:
-            start_budget = sheet.getCellByPosition(11, 3).getValue()
+            start_budget = START_BUDGET_CELL.getValue()
         super().__init__(acquisitions, monthly_budget, start_budget, today=today)
 
     @staticmethod
@@ -417,7 +466,8 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
         debug_info = f"Planning(monthly_budget={self.monthly_budget}, \
 sum_of_weights={self.sum_of_weights}, \
 months={len(self._planning_dates)}, \
-planning_dates={planning_dates})"
+planning_dates={planning_dates}, \
+start_budget={self.start_budget})"
         self.planning_debug_cell.setString(debug_info)
 
     def write_sum_of_acquired_budgets(self):
@@ -469,6 +519,10 @@ class SpreadsheetPlanningEgalitarianDistribution(SpreadsheetPlanning,
     """Planning with egalitarian distribution mode."""
 
 
+class SpreadsheetPlanningTargetDate(SpreadsheetPlanning, BasePlanningTargetDate):
+    """Planning with target date mode."""
+
+
 class PlanningMode(Enum):
     """Enum for the different planning modes."""
 
@@ -478,24 +532,30 @@ class PlanningMode(Enum):
     BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING = 4
     BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING = 5
     EGALITARIAN_DISTRIBUTION = 6
+    TARGET_DATE = 7
 
     @staticmethod
     def read_from_spreadsheet():  # python 3.11, here we come (-> Self)!
         """Read the planning mode from the spreadsheet."""
-        value = sheet.getCellByPosition(10, 7).getString()
+        value = PLANNING_MODE_CELL.getString()
+        mode: PlanningMode
         if value == "Gewichtete monatliche Allokation":
-            return PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
-        if value == "Datierte sequenzielle Allokation":
-            return PlanningMode.DATED_SEQUENTIAL_ACQUISITION
-        if value == "Gewichtete sequenzielle Allokation":
-            return PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
-        if value == "Budgetorientierte sequenzielle Allokation (aufsteigend)":
-            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
-        if value == "Budgetorientierte sequenzielle Allokation (absteigend)":
-            return PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
-        if value == "Egalitäre Verteilung":
-            return PlanningMode.EGALITARIAN_DISTRIBUTION
-        raise ValueError(f"Unsupported planning mode '{value}'")
+            mode = PlanningMode.WEIGHTED_MONTHLY_CONTRIBUTION
+        elif value == "Datierte sequenzielle Allokation":
+            mode = PlanningMode.DATED_SEQUENTIAL_ACQUISITION
+        elif value == "Gewichtete sequenzielle Allokation":
+            mode = PlanningMode.WEIGHTED_SEQUENTIAL_ACQUISITION
+        elif value == "Budgetorientierte sequenzielle Allokation (aufsteigend)":
+            mode = PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_ASCENDING
+        elif value == "Budgetorientierte sequenzielle Allokation (absteigend)":
+            mode = PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING
+        elif value == "Egalitäre Verteilung":
+            mode = PlanningMode.EGALITARIAN_DISTRIBUTION
+        elif value == "Zieldatum":
+            mode = PlanningMode.TARGET_DATE
+        else:
+            raise ValueError(f"Unsupported planning mode '{value}'")
+        return mode
 
 
 def _calculate_budgets_of_type(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
@@ -521,7 +581,9 @@ def calculate_budgets(*args):  # pylint: disable=invalid-name,unused-argument
             SpreadsheetPlanningBudgetOrientedSequentialAcquisitionAscending,
         PlanningMode.BUDGET_ORIENTED_SEQUENTIAL_ACQUISITION_DESCENDING:
             SpreadsheetPlanningBudgetOrientedSequentialAcquisitionDescending,
-        PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution}
+        PlanningMode.EGALITARIAN_DISTRIBUTION: SpreadsheetPlanningEgalitarianDistribution,
+        PlanningMode.TARGET_DATE: SpreadsheetPlanningTargetDate,
+    }
     for mode_type, planning in mode_map.items():
         if mode == mode_type:
             _calculate_budgets_of_type(planning)

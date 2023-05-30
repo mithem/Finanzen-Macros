@@ -1,18 +1,21 @@
 from datetime import date, timedelta
+from typing import Optional
 
 from finance_macros.acquisitions import (
     BaseAcquisition,
     BasePlanningWeightedMonthlyContribution,
     BasePlanningDatedSequentialAcquisition,
     BasePlanningWeightedSequentialAcquisition,
-    BasePlanningEgalitarianDistribution,
+    BasePlanningEgalitarianDistribution, BasePlanningTargetDate,
 )
 
 
-def ac(name: str, target_budget: float, weight: int, days: int) -> BaseAcquisition:
+def ac(name: str, target_budget: float, weight: int, days: int,
+       target_date: Optional[date] = None) -> BaseAcquisition:
     anchor = date(2023, 1, 1)
     return BaseAcquisition(
-        name, 0, target_budget, anchor + timedelta(days=days), weight
+        name, 0, target_budget, anchor + timedelta(days=days),
+        target_date, weight
     )
 
 
@@ -34,7 +37,7 @@ def test_acquisition():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     assert acquisition.request_budget() == 100
     acquisition.allocate_budget(50)
@@ -48,7 +51,7 @@ def test_wmcplanning_allocate_budget_single_acquisition():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 1, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -64,7 +67,7 @@ def test_wmcplanning_calculate_acquired_budgets_doesnt_start_on_today():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2022, 1, 1)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -80,7 +83,7 @@ def test_wmcplanning_calculate_acquired_budgets_does_start_on_first_day_in_past(
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 1, 2)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -96,7 +99,7 @@ def test_wmcplanning_calculate_acquired_budgets_does_start_on_first_day_when_aft
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 27),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 2, 1)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -112,7 +115,7 @@ def test_wmcplanning_calculate_acquired_budgets_single_acquisition_before_start(
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2022, 12, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -128,7 +131,7 @@ def test_wmcplanning_calculate_acquired_budgets_single_acquisition_interim():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -144,7 +147,7 @@ def test_wmcplanning_calculate_acquired_budgets_single_acquisition_after_end():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 6, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -160,14 +163,14 @@ def test_wmcplanning_calculate_acquired_budgets_two_acquisitions_before_start():
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2022, 12, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -187,14 +190,14 @@ def test_wmcplanning_calculate_acquired_budgets_two_acquisitions_interim():
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 11, 15),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -214,14 +217,14 @@ def test_wmcplanning_calculate_acquired_budgets_two_acquisitions_after_end_uses_
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 11, 15),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 7, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -241,21 +244,21 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_interim_uses_
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 11, 15),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     acquisition3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -276,21 +279,21 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_interim():
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 11, 15),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     acquisition3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 4, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -313,21 +316,21 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_after_end():
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 11, 15),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     acquisition3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 7, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -349,14 +352,14 @@ def test_wmcplanning_allocates_start_budget():
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 9, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -379,14 +382,14 @@ def test_wmcplanning_allocates_start_budget_applies_extra_budget():
         start_budget=0,
         target_budget=100,
         start_date=date(2022, 9, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=10,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -409,14 +412,14 @@ def test_wmcplanning_allocate_start_budget_handles_satisfied_acquisitions():
         start_budget=0,
         target_budget=50,
         start_date=date(2022, 9, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -439,21 +442,21 @@ def test_wmcplanning_allocate_start_budget_handles_satisfied_acquisitions_comple
         start_budget=0,
         target_budget=500,
         start_date=date(2022, 9, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=50,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     ac3 = BaseAcquisition(
         name="test3",
         start_budget=10,
         target_budget=200,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -478,7 +481,7 @@ def test_wmcplanning_uses_start_budgets_before_first_planning_date():
         start_budget=50,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 1, 1)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -498,7 +501,7 @@ def test_wmcplanning_allocates_start_budget_long_term():
         start_budget=50,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -518,14 +521,14 @@ def test_wmcplanning_end_to_end_simple():
         start_budget=50,
         target_budget=200,
         start_date=date(2022, 12, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     acquisition2 = BaseAcquisition(
         name="test2",
         start_budget=100,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=4,
+        target_date=None, weight=4,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedMonthlyContribution(
@@ -554,35 +557,35 @@ def test_end_to_end_complex():
         start_budget=0,
         target_budget=1500,
         start_date=date(2023, 2, 24),
-        weight=2,
+        target_date=None, weight=2,
     )
     ac2 = BaseAcquisition(
         name="2",
         start_budget=50,
         target_budget=1000,
         start_date=date(2023, 2, 24),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac3 = BaseAcquisition(
         name="3",
         start_budget=0,
         target_budget=350,
         start_date=date(2023, 3, 10),
-        weight=10,
+        target_date=None, weight=10,
     )
     ac4 = BaseAcquisition(
         name="4",
         start_budget=0,
         target_budget=1000,
         start_date=date(2023, 3, 19),
-        weight=2,
+        target_date=None, weight=2,
     )
     ac5 = BaseAcquisition(
         name="5",
         start_budget=0,
         target_budget=800,
         start_date=date(2023, 3, 24),
-        weight=1,
+        target_date=None, weight=1,
     )
     today = date(2023, 3, 24)
     acs = [ac1, ac2, ac3, ac4, ac5]
@@ -609,21 +612,21 @@ def test_dsaplanning():
         start_budget=50,
         target_budget=200,
         start_date=date(2022, 12, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac2 = BaseAcquisition(
         name="test2",
         start_budget=100,
         target_budget=500,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     ac3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningDatedSequentialAcquisition(
@@ -696,21 +699,21 @@ def test_wsaplanning():
         start_budget=50,
         target_budget=150,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac2 = BaseAcquisition(
         name="test2",
         start_budget=100,
         target_budget=150,
         start_date=date(2023, 1, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     ac3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningWeightedSequentialAcquisition(
@@ -732,21 +735,21 @@ def test_egalitarian_distribution():
         start_budget=50,
         target_budget=90,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=500,
         start_date=date(2023, 2, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     ac3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=100,
         start_date=date(2023, 3, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningEgalitarianDistribution(
@@ -768,21 +771,21 @@ def test_egalitarian_distribution_2():
         start_budget=50,
         target_budget=60,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     ac2 = BaseAcquisition(
         name="test2",
         start_budget=0,
         target_budget=20,
         start_date=date(2023, 2, 1),
-        weight=2,
+        target_date=None, weight=2,
     )
     ac3 = BaseAcquisition(
         name="test3",
         start_budget=0,
         target_budget=30,
         start_date=date(2023, 3, 1),
-        weight=3,
+        target_date=None, weight=3,
     )
     today = date(2023, 3, 15)
     planning = BasePlanningEgalitarianDistribution(
@@ -804,7 +807,7 @@ def test_acquisition_does_not_request_budget_when_weight_is_0():
         start_budget=50,
         target_budget=60,
         start_date=date(2023, 1, 1),
-        weight=1,
+        target_date=None, weight=1,
     )
     assert ac1.request_budget() == 10
 
@@ -813,7 +816,7 @@ def test_acquisition_does_not_request_budget_when_weight_is_0():
         start_budget=50,
         target_budget=100,
         start_date=date(2023, 1, 1),
-        weight=0,
+        target_date=None, weight=0,
     )
     assert ac2.request_budget() == 0
 
@@ -831,3 +834,78 @@ def test_planning_does_not_allocate_to_acquisitions_with_weight_0():
     assert a2.budget_acquired == 30
     assert a3.budget_acquired == 0
     assert a4.budget_acquired == 30
+
+
+def test_target_date_planning():
+    a1 = ac("a", 1200, 1, 0, date(2024, 1, 1))
+    a2 = ac("b", 1200, 1, 0, date(2025, 1, 1))
+
+    planning = BasePlanningTargetDate([a1, a2], 200, 0, date(2023, 12, 1))
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 1200
+    assert a2.budget_acquired == 600
+
+    for a in [a1, a2]:
+        a.budget_acquired = 0
+
+    planning.today = date(2025, 1, 1)
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 1200
+    assert a2.budget_acquired == 1200
+
+
+def test_target_date_planning_2():
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=600,
+        target_budget=1200,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=1200,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=3
+    )
+    a3 = BaseAcquisition(
+        name="c",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=4
+    )
+    a4 = BaseAcquisition(
+        name="d",
+        start_budget=0,
+        target_budget=1000,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=5
+    )
+
+    planning = BasePlanningTargetDate([a1, a2, a3, a4], 200, 0, date(2023, 6, 15))
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 600
+    assert a2.budget_acquired == 0
+    assert a3.budget_acquired == 200
+    assert a4.budget_acquired == 1000
+
+    for a in [a2, a3, a4]:
+        a.budget_acquired = 0
+    a1.budget_acquired = a1.start_budget
+
+    planning.today = date(2023, 12, 31)
+    planning.calculate_acquired_budgets()
+
+    assert a1.budget_acquired == 800
+    assert a2.budget_acquired == 400
+    assert a3.budget_acquired == 600
+    assert a4.budget_acquired == 1000
