@@ -4,7 +4,7 @@ import datetime
 DATE_COLUMN = 4
 NET_WORTH_COLUMN = 5
 DEPOT_VALUE_COLUMN = 6
-FIRST_DATA_ROW = 55
+FIRST_DATA_ROW = 63
 
 try:
     # pylint: disable=undefined-variable
