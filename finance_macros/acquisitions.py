@@ -24,6 +24,7 @@ try:
     TODAY_OVERWRITE_CELL = sheet.getCellByPosition(6, 3)
     MONTHLY_BUDGET_CELL = sheet.getCellByPosition(12, 11)
     START_BUDGET_CELL = sheet.getCellByPosition(13, 3)
+    ALREADY_ALLOCATED_WITHOUT_PLANNING_START_BUDGET_CELL = sheet.getCellByPosition(12, 5)
 except NameError:
     pass  # running tests
 
@@ -474,7 +475,7 @@ start_budget={self.start_budget})"
         """Write the sum of acquired budgets to the spreadsheet."""
         sum_of_acquired_budgets = sum(
             acquisition.budget_acquired for acquisition in self.acquisitions)
-        sheet.getCellByPosition(10, 5).setValue(sum_of_acquired_budgets)
+        ALREADY_ALLOCATED_WITHOUT_PLANNING_START_BUDGET_CELL.setValue(sum_of_acquired_budgets)
 
 
 class SpreadsheetPlanningWeightedMonthlyContribution(SpreadsheetPlanning,
