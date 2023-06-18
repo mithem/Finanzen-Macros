@@ -6,7 +6,8 @@ from finance_macros.acquisitions import (
     BasePlanningWeightedMonthlyContribution,
     BasePlanningDatedSequentialAcquisition,
     BasePlanningWeightedSequentialAcquisition,
-    BasePlanningEgalitarianDistribution, BasePlanningTargetDate,
+    BasePlanningEgalitarianDistribution,
+    BasePlanningTargetDate,
 )
 
 
@@ -28,7 +29,7 @@ def _sum_start_budgets(*acquisitions: BaseAcquisition):
 
 
 def assert_round(a: float, b: float):
-    assert round(a, 2) == round(b, 2)
+    assert round(a, 2) == round(b, 2), f"{a} != {b}"
 
 
 def test_acquisition():
@@ -893,19 +894,95 @@ def test_target_date_planning_2():
     planning = BasePlanningTargetDate([a1, a2, a3, a4], 200, 0, date(2023, 6, 15))
     planning.calculate_acquired_budgets()
 
-    assert a1.budget_acquired == 600
-    assert a2.budget_acquired == 0
-    assert a3.budget_acquired == 200
-    assert a4.budget_acquired == 1000
+    assert_round(a1.budget_acquired, 600)
+    assert_round(a2.budget_acquired, 0)
+    assert_round(a3.budget_acquired, 533.33)
+    assert_round(a4.budget_acquired, 666.67)
 
-    for a in [a2, a3, a4]:
-        a.budget_acquired = 0
-    a1.budget_acquired = a1.start_budget
+    for a in [a1, a2, a3, a4]:
+        a.budget_acquired = a.start_budget
 
     planning.today = date(2023, 12, 31)
     planning.calculate_acquired_budgets()
 
-    assert a1.budget_acquired == 800
-    assert a2.budget_acquired == 400
-    assert a3.budget_acquired == 600
-    assert a4.budget_acquired == 1000
+    assert_round(a1.budget_acquired, 600)
+    assert_round(a2.budget_acquired, 800)
+    assert_round(a3.budget_acquired, 600)
+    assert_round(a4.budget_acquired, 1000)
+
+
+def test_target_date_planning_3():
+    def reset_acquisitions():
+        for a in [a1, a2, a3, a4]:
+            a.budget_acquired = a.start_budget
+
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=2
+    )
+    a3 = BaseAcquisition(
+        name="c",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=1
+    )
+    a4 = BaseAcquisition(
+        name="d",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=2
+    )
+
+    planning = BasePlanningTargetDate([a1, a2, a3, a4], 200, 0, date(2023, 3, 15))
+
+    assert planning.immediate_allocation_required(planning.acquisitions) == (1200, [a3, a4])
+
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 0)
+    assert_round(a2.budget_acquired, 0)
+    assert_round(a3.budget_acquired, 200)
+    assert_round(a4.budget_acquired, 400)
+
+    reset_acquisitions()
+    planning.today = date(2023, 6, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 0)
+    assert_round(a2.budget_acquired, 0)
+    assert_round(a3.budget_acquired, 600)
+    assert_round(a4.budget_acquired, 600)
+
+    reset_acquisitions()
+    planning.today = date(2023, 9, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 150)
+    assert_round(a2.budget_acquired, 450)
+    assert_round(a3.budget_acquired, 600)
+    assert_round(a4.budget_acquired, 600)
+
+    reset_acquisitions()
+    planning.today = date(2024, 1, 1)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 600)
+    assert_round(a2.budget_acquired, 600)
+    assert_round(a3.budget_acquired, 600)
+    assert_round(a4.budget_acquired, 600)

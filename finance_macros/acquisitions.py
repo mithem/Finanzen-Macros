@@ -2,7 +2,7 @@
 """Acquisition budgeting."""
 from datetime import date, datetime, timedelta
 from enum import Enum
-from typing import List, Optional, Type, Callable, Any
+from typing import List, Optional, Type, Callable, Any, Tuple
 
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
@@ -33,6 +33,16 @@ def _get_next_planning_date(planning_date: date) -> date:
     """Return the next planning date after the given planning date."""
     tmp = planning_date + timedelta(days=32)
     return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
+
+
+def _planning_date_count_between(date1: date, date2: date):
+    """Return the number of planning dates between the two given dates."""
+    counter = 0
+    planning_date = date1
+    while planning_date < date2:
+        counter += 1
+        planning_date = _get_next_planning_date(planning_date)
+    return counter
 
 
 class BaseAcquisition:
@@ -84,12 +94,7 @@ weight={self.weight})"
         """Return the number of planning dates until the target date."""
         if not self.target_date:
             return None
-        counter = 0
-        planning_date = self.start_date
-        while planning_date < self.target_date:
-            counter += 1
-            planning_date = _get_next_planning_date(planning_date)
-        return counter
+        return _planning_date_count_between(self.start_date, self.target_date)
 
 
 class BasePlanning:
@@ -334,19 +339,43 @@ class BasePlanningEgalitarianDistribution(BasePlanning):
 
 class BasePlanningTargetDate(BasePlanning):
     """Planning mode that allocates budgets in a way
-    that the target budget is reached at the target date."""
+    that the target budget is reached at the target date. Acquisitions
+    without a target date are allocated immediately (prioritized). Acquisitions
+    with higher weights are prioritized (with or without target budget)."""
 
-    def allocate_budget(self, budget: float):
+    def immediate_allocation_required(self, acquisitions: List[BaseAcquisition]) -> \
+            Tuple[float, List[BaseAcquisition]]:
+        """Return the amount of budget that acquisitions require which have no
+        end date scheduled."""
+        acqs = list(filter(lambda a: a.target_date is None, acquisitions))
+        return sum(map(lambda a: a.request_budget(), acqs)), acqs
+
+    def allocate_budget(self, budget: float, planning_date: date):
         """Allocate a one-time budget (e.g. of a month or a starting budget)."""
         remaining_budget = budget
         acquisitions = sorted(self.acquisitions, key=lambda a: a.weight, reverse=True)
+        immediate_allocation_budget, immediate_acquisitions = self. \
+            immediate_allocation_required(acquisitions)
+
+        # Allocate budget to acquisitions without a target date
+        planning = BasePlanningWeightedMonthlyContribution(immediate_acquisitions, 0, 0, self.today)
+        budget_to_allocate = min(remaining_budget, immediate_allocation_budget)
+        planning.allocate_budget(budget_to_allocate, self.today,
+                                 planning.sum_of_relevant_weights_at_planning_date(self.today))
+        remaining_budget -= budget_to_allocate
+
         for acq in acquisitions:
             requested = acq.request_budget()
             num_planning_dates = acq.planning_dates_until_target_date()
             if num_planning_dates is None or num_planning_dates == 0:
                 num_planning_dates = 1
+            allocation_deficit = \
+                (acq.target_budget - acq.start_budget) / num_planning_dates \
+                * _planning_date_count_between(
+                    acq.start_date, planning_date
+                ) - acq.budget_acquired + acq.start_budget
             to_allocate = min(
-                (acq.target_budget - acq.start_budget) / num_planning_dates,
+                (acq.target_budget - acq.start_budget) / num_planning_dates + allocation_deficit,
                 requested,
                 remaining_budget
             )
@@ -354,8 +383,13 @@ class BasePlanningTargetDate(BasePlanning):
             remaining_budget -= to_allocate
 
     def calculate_acquired_budgets(self):
-        self.allocate_budget(self.start_budget)
-        self.call_at_each_planning_date(lambda _: self.allocate_budget(self.monthly_budget))
+        earliest_planning_date = self.get_earliest_planning_date()
+        self.allocate_budget(
+            self.start_budget, earliest_planning_date if earliest_planning_date else self.today
+        )
+        self.call_at_each_planning_date(
+            lambda planning_date: self.allocate_budget(self.monthly_budget, planning_date)
+        )
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
