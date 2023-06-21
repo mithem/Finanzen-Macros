@@ -552,6 +552,15 @@ def test_wmcplanning_end_to_end_simple():
     )
 
 
+def test_wmcplanning_no_negative_allocations():
+    a = BaseAcquisition("test", 0, 100, date(2023, 1, 1), None, 1)
+    planning = BasePlanningWeightedMonthlyContribution([a], 50, -10, date(2023, 1, 1))
+    planning.calculate_acquired_budgets()
+
+    assert a.budget_acquired == 0
+    assert a.start_budget == 0
+
+
 def test_end_to_end_complex():
     ac1 = BaseAcquisition(
         name="1",

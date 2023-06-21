@@ -194,7 +194,7 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
                 continue
             if sum_of_weights == 0:  # all acquisitions allocated for 100%
                 return
-            available_budget = budget * acquisition.weight / sum_of_weights
+            available_budget = max(budget * acquisition.weight / sum_of_weights, 0)
             if requested_budget >= available_budget:
                 acquisition.allocate_budget(available_budget)
             else:
