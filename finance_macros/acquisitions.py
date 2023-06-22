@@ -68,9 +68,11 @@ class BaseAcquisition:
         self.target_date = target_date
         self.weight = weight
 
-    def request_budget(self):
+    def request_budget(self, current_date: Optional[date] = None):
         """Return the amount of budget that is still needed to reach the target budget."""
         if self.weight == 0:
+            return 0
+        if current_date and self.start_date > current_date:
             return 0
         return self.target_budget - self.budget_acquired
 
@@ -124,13 +126,14 @@ class BasePlanning:
         """Return the sum of weights of all acquisitions that are relevant
         for the given planning date."""
         return sum(acquisition.weight for acquisition in
-                   filter(lambda a: a.start_date <= planning_date and a.request_budget(),
-                          self.acquisitions, ))
+                   filter(
+                       lambda a: a.start_date <= planning_date and a.request_budget(planning_date),
+                       self.acquisitions, ))
 
-    def sum_of_relevant_weights(self):
+    def sum_of_relevant_weights(self, planning_date: date):
         """Return the sum of weights of all acquisitions that are relevant"""
         return sum(acquisition.weight for acquisition in
-                   filter(lambda a: a.request_budget(), self.acquisitions))
+                   filter(lambda a: a.request_budget(planning_date), self.acquisitions))
 
     def calculate_acquired_budgets(self):
         """Calculate the acquired budgets for all acquisitions at the `today` date."""
@@ -172,9 +175,12 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
         for acquisition in self.acquisitions:
             if acquisition.start_date > planning_date:
                 continue
-            requested_budget = acquisition.request_budget()
+            requested_budget = acquisition.request_budget(planning_date)
             if requested_budget > 0:
-                available_budget = budget * acquisition.weight / sum_of_weights_at_planning_date
+                available_budget = max(
+                    0.0,
+                    budget * acquisition.weight / sum_of_weights_at_planning_date
+                )
                 budget_to_allocate = min(available_budget, requested_budget)
                 acquisition.allocate_budget(budget_to_allocate)
                 extra_budget += available_budget - budget_to_allocate
@@ -187,9 +193,9 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
     def allocate_planning_start_budget(self, budget: float):
         """Allocate the planning's start budget to all acquisitions, depending on their weight."""
         extra_budget = 0
-        sum_of_weights = self.sum_of_relevant_weights()
+        sum_of_weights = self.sum_of_relevant_weights(self.today)
         for acquisition in self.acquisitions:
-            requested_budget = acquisition.request_budget()
+            requested_budget = acquisition.request_budget(self.today)
             if requested_budget == 0:
                 continue
             if sum_of_weights == 0:  # all acquisitions allocated for 100%
@@ -223,11 +229,11 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
 
     def allocate_planning_start_budget(self, acquisition_sequence: List[BaseAcquisition]):
         """Allocate the planning's start budget to all acquisitions in the given sequence."""
-        available_budget = self.start_budget
+        available_budget = max(self.start_budget, 0)
         acq_count = len(acquisition_sequence)
         acq_idx = 0
         while available_budget and acq_idx < acq_count:
-            requested_budget = acquisition_sequence[acq_idx].request_budget()
+            requested_budget = acquisition_sequence[acq_idx].request_budget(self.today)
             if requested_budget <= available_budget:
                 acquisition_sequence[acq_idx].allocate_budget(requested_budget)
                 available_budget -= requested_budget
@@ -245,7 +251,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
         if budget == 0:
             return acq_idx
         acq_count = len(acquisition_sequence)
-        available_budget = budget
+        available_budget = max(budget, 0)
         while acq_idx < acq_count and available_budget:
             requested_budget = acquisition_sequence[acq_idx].request_budget()
             if requested_budget > available_budget:
@@ -266,7 +272,11 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
             return
         self.allocate_planning_start_budget(acquisition_sequence)
         while planning_date <= self.today and acq_idx < acq_count:
-            acq_idx = self.allocate_budget(self.monthly_budget, acquisition_sequence, acq_idx)
+            acq_idx = self.allocate_budget(
+                self.monthly_budget,
+                acquisition_sequence,
+                acq_idx
+            )
             planning_date = _get_next_planning_date(planning_date)
 
 
@@ -317,7 +327,7 @@ class BasePlanningEgalitarianDistribution(BasePlanning):
         relevant_acquisitions = list(filter(lambda a: a.request_budget(), self.acquisitions))
         if not relevant_acquisitions:
             return
-        available = budget / len(relevant_acquisitions)
+        available = max(budget / len(relevant_acquisitions), 0)
         extra_budget = 0
         for acq in relevant_acquisitions:
             requested = acq.request_budget()
@@ -343,19 +353,22 @@ class BasePlanningTargetDate(BasePlanning):
     without a target date are allocated immediately (prioritized). Acquisitions
     with higher weights are prioritized (with or without target budget)."""
 
-    def immediate_allocation_required(self, acquisitions: List[BaseAcquisition]) -> \
-            Tuple[float, List[BaseAcquisition]]:
+    def immediate_allocation_required(
+            self,
+            acquisitions: List[BaseAcquisition],
+            planning_date: date
+    ) -> Tuple[float, List[BaseAcquisition]]:
         """Return the amount of budget that acquisitions require which have no
         end date scheduled."""
         acqs = list(filter(lambda a: a.target_date is None, acquisitions))
-        return sum(map(lambda a: a.request_budget(), acqs)), acqs
+        return sum(map(lambda a: a.request_budget(planning_date), acqs)), acqs
 
     def allocate_budget(self, budget: float, planning_date: date):
         """Allocate a one-time budget (e.g. of a month or a starting budget)."""
         remaining_budget = budget
         acquisitions = sorted(self.acquisitions, key=lambda a: a.weight, reverse=True)
         immediate_allocation_budget, immediate_acquisitions = self. \
-            immediate_allocation_required(acquisitions)
+            immediate_allocation_required(acquisitions, planning_date)
 
         # Allocate budget to acquisitions without a target date
         planning = BasePlanningWeightedMonthlyContribution(immediate_acquisitions, 0, 0, self.today)
@@ -365,7 +378,7 @@ class BasePlanningTargetDate(BasePlanning):
         remaining_budget -= budget_to_allocate
 
         for acq in acquisitions:
-            requested = acq.request_budget()
+            requested = acq.request_budget(planning_date)
             num_planning_dates = acq.planning_dates_until_target_date()
             if num_planning_dates is None or num_planning_dates == 0:
                 num_planning_dates = 1
@@ -374,10 +387,14 @@ class BasePlanningTargetDate(BasePlanning):
                 * _planning_date_count_between(
                     acq.start_date, planning_date
                 ) - acq.budget_acquired + acq.start_budget
-            to_allocate = min(
-                (acq.target_budget - acq.start_budget) / num_planning_dates + allocation_deficit,
-                requested,
-                remaining_budget
+            to_allocate = max(
+                0.0,
+                min(
+                    (acq.target_budget - acq.start_budget) / num_planning_dates
+                    + allocation_deficit,
+                    requested,
+                    remaining_budget
+                )
             )
             acq.allocate_budget(to_allocate)
             remaining_budget -= to_allocate
