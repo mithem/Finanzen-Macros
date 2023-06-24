@@ -8,7 +8,14 @@ from finance_macros.acquisitions import (
     BasePlanningWeightedSequentialAcquisition,
     BasePlanningEgalitarianDistribution,
     BasePlanningTargetDate,
+    BasePlanning,
+    _get_next_planning_date
 )
+
+
+def reset(*acquisitions):
+    for a in acquisitions:
+        a.budget_acquired = a.start_budget
 
 
 def ac(name: str, target_budget: float, weight: int, days: int,
@@ -44,17 +51,6 @@ def test_acquisition():
     acquisition.allocate_budget(50)
     assert acquisition.request_budget(date(2023, 1, 1)) == 50
     assert acquisition.budget_acquired == 50
-
-
-def test_acquisition_doesnt_request_before_start_date():
-    acquisition = BaseAcquisition(
-        name="test",
-        start_budget=0,
-        target_budget=100,
-        start_date=date(2023, 1, 1),
-        target_date=None, weight=1,
-    )
-    assert acquisition.request_budget(date(2022, 6, 1)) == 0
 
 
 def test_wmcplanning_allocate_budget_single_acquisition():
@@ -492,10 +488,10 @@ def test_wmcplanning_uses_start_budgets_before_first_planning_date():
         name="test",
         start_budget=50,
         target_budget=100,
-        start_date=date(2023, 1, 1),
+        start_date=date(2023, 1, 15),
         target_date=None, weight=1,
     )
-    today = date(2023, 1, 1)
+    today = date(2023, 1, 20)
     planning = BasePlanningWeightedMonthlyContribution(
         acquisitions=[acquisition],
         monthly_budget=10,
@@ -568,7 +564,7 @@ def test_wmcplanning_no_negative_allocations():
     planning = BasePlanningWeightedMonthlyContribution([a], 50, -10, date(2023, 1, 1))
     planning.calculate_acquired_budgets()
 
-    assert a.budget_acquired == 0
+    assert a.budget_acquired == 50
     assert a.start_budget == 0
 
 
@@ -842,6 +838,46 @@ def test_acquisition_does_not_request_budget_when_weight_is_0():
     assert ac2.request_budget(date(2024, 1, 1)) == 0
 
 
+def test_acquisition_does_not_request_budget_before_start_date():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=60,
+        start_date=date(2023, 1, 1),
+        target_date=None, weight=1,
+    )
+    assert ac1.request_budget(date(2022, 12, 1)) == 0
+
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=50,
+        target_budget=100,
+        start_date=date(2023, 1, 1),
+        target_date=None, weight=1,
+    )
+    assert ac2.request_budget(date(2023, 1, 1)) == 50
+
+
+def test_acquisition_does_request_budget_when_no_current_date_is_given():
+    ac1 = BaseAcquisition(
+        name="test1",
+        start_budget=50,
+        target_budget=60,
+        start_date=date(2023, 1, 1),
+        target_date=None, weight=1,
+    )
+    assert ac1.request_budget() == 10
+
+    ac2 = BaseAcquisition(
+        name="test2",
+        start_budget=50,
+        target_budget=100,
+        start_date=date(2023, 1, 1),
+        target_date=None, weight=2,
+    )
+    assert ac2.request_budget() == 50
+
+
 def test_planning_does_not_allocate_to_acquisitions_with_weight_0():
     a1 = ac("a", 1000, 1, 1)
     a2 = ac("b", 1000, 1, 1)
@@ -867,8 +903,7 @@ def test_target_date_planning():
     assert a1.budget_acquired == 1200
     assert a2.budget_acquired == 600
 
-    for a in [a1, a2]:
-        a.budget_acquired = 0
+    reset(a1, a2)
 
     planning.today = date(2025, 1, 1)
     planning.calculate_acquired_budgets()
@@ -919,8 +954,7 @@ def test_target_date_planning_2():
     assert_round(a3.budget_acquired, 533.33)
     assert_round(a4.budget_acquired, 666.67)
 
-    for a in [a1, a2, a3, a4]:
-        a.budget_acquired = a.start_budget
+    reset(a1, a2, a3, a4)
 
     planning.today = date(2023, 12, 31)
     planning.calculate_acquired_budgets()
@@ -933,8 +967,7 @@ def test_target_date_planning_2():
 
 def test_target_date_planning_3():
     def reset_acquisitions():
-        for a in [a1, a2, a3, a4]:
-            a.budget_acquired = a.start_budget
+        reset(a1, a2, a3, a4)
 
     a1 = BaseAcquisition(
         name="a",
@@ -971,7 +1004,8 @@ def test_target_date_planning_3():
 
     planning = BasePlanningTargetDate([a1, a2, a3, a4], 200, 0, date(2023, 3, 15))
 
-    assert planning.immediate_allocation_required(planning.acquisitions, date(2023, 1, 1)) == (1200, [a3, a4])
+    assert planning.immediate_allocation_required(planning.acquisitions, date(2023, 1, 1)) == (
+        1200, [a3, a4])
 
     planning.calculate_acquired_budgets()
 
@@ -1008,6 +1042,141 @@ def test_target_date_planning_3():
     assert_round(a4.budget_acquired, 600)
 
 
+def test_target_date_planning_4():
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 7, 1),
+        target_date=date(2024, 1, 1),
+        weight=2
+    )
+    a3 = BaseAcquisition(
+        name="c",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=1
+    )
+
+    planning = BasePlanningTargetDate([a1, a2, a3], 200, 0, date(2023, 3, 15))
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 0)
+    assert_round(a2.budget_acquired, 0)
+    assert_round(a3.budget_acquired, 600)
+
+    reset(a1, a2, a3)
+    planning.today = date(2023, 6, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 300)
+    assert_round(a2.budget_acquired, 0)
+    assert_round(a3.budget_acquired, 600)
+
+    reset(a1, a2, a3)
+    planning.today = date(2023, 7, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 350)
+    assert_round(a2.budget_acquired, 100)
+    assert_round(a3.budget_acquired, 600)
+
+
+def test_target_date_planning_5():
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=None,
+        weight=1
+    )
+    a3 = BaseAcquisition(
+        name="c",
+        start_budget=0,
+        target_budget=600,
+        start_date=None,
+        target_date=None,
+        weight=1
+    )
+
+    def reset_acqs():
+        reset(a1, a2, a3)
+
+    planning = BasePlanningTargetDate([a1, a2, a3], 200, 0, date(2023, 3, 15))
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 0)
+    assert_round(a2.budget_acquired, 300)
+    assert_round(a3.budget_acquired, 300)
+
+    reset_acqs()
+    planning.today = date(2023, 6, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 0)
+    assert_round(a2.budget_acquired, 600)
+    assert_round(a3.budget_acquired, 600)
+
+    reset_acqs()
+    planning.today = date(2023, 9, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 450)
+    assert_round(a2.budget_acquired, 600)
+    assert_round(a3.budget_acquired, 600)
+
+
+def test_target_date_planning_mid_month_start_dates():
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2022, 12, 30),
+        target_date=None,
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 15),
+        target_date=None,
+        weight=2
+    )
+
+    planning = BasePlanningTargetDate([a1, a2], 300, 60, date(2023, 1, 25))
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 120)
+    assert_round(a2.budget_acquired, 240)
+
+    reset(a1, a2)
+    planning.today = date(2023, 2, 15)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 220)
+    assert_round(a2.budget_acquired, 440)
+
+
 def test_target_date_planning_no_negative_allocation():
     a1 = BaseAcquisition(
         name="a",
@@ -1031,3 +1200,73 @@ def test_target_date_planning_no_negative_allocation():
 
     assert_round(a1.budget_acquired, 0)
     assert_round(a2.budget_acquired, 0)
+
+
+def test_get_earliest_planning_date():
+    a1 = BaseAcquisition(
+        name="a",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 1),
+        target_date=date(2024, 1, 1),
+        weight=1
+    )
+    a2 = BaseAcquisition(
+        name="b",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 1, 15),
+        target_date=None,
+        weight=1
+    )
+    a3 = BaseAcquisition(
+        name="c",
+        start_budget=0,
+        target_budget=600,
+        start_date=date(2023, 2, 10),
+        target_date=None,
+        weight=1
+    )
+    planning = BasePlanning([a1, a2], 0, 0, date(2023, 3, 15))
+    assert planning.get_earliest_planning_date() == date(2023, 1, 1)
+
+    planning = BasePlanning([a2, a3], 0, 0, date(2023, 3, 15))
+    assert planning.get_earliest_planning_date() == date(2023, 2, 1)
+
+
+def test_get_next_planning_date_first_of_month():
+    assert _get_next_planning_date(date(2023, 1, 1), 1) == date(2023, 2, 1)
+    assert _get_next_planning_date(date(2023, 1, 15), 1) == date(2023, 2, 1)
+    assert _get_next_planning_date(date(2023, 1, 31), 1) == date(2023, 2, 1)
+    assert _get_next_planning_date(date(2023, 2, 1), 1) == date(2023, 3, 1)
+    assert _get_next_planning_date(date(2023, 2, 28), 1) == date(2023, 3, 1)
+
+
+def test_get_next_planning_date_last_of_month():
+    assert _get_next_planning_date(date(2023, 1, 1), -1) == date(2023, 1, 31)
+    assert _get_next_planning_date(date(2023, 1, 15), -1) == date(2023, 1, 31)
+    assert _get_next_planning_date(date(2023, 1, 31), -1) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 2, 1), -1) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 2, 28), -1) == date(2023, 3, 31)
+    assert _get_next_planning_date(date(2023, 3, 31), -1) == date(2023, 4, 30)
+
+
+def test_get_next_planning_20th_of_month():
+    assert _get_next_planning_date(date(2023, 1, 1), 20) == date(2023, 1, 20)
+    assert _get_next_planning_date(date(2023, 1, 15), 20) == date(2023, 1, 20)
+    assert _get_next_planning_date(date(2023, 1, 20), 20) == date(2023, 2, 20)
+    assert _get_next_planning_date(date(2023, 1, 31), 20) == date(2023, 2, 20)
+    assert _get_next_planning_date(date(2023, 2, 1), 20) == date(2023, 2, 20)
+    assert _get_next_planning_date(date(2023, 2, 19), 20) == date(2023, 2, 20)
+    assert _get_next_planning_date(date(2023, 2, 20), 20) == date(2023, 3, 20)
+    assert _get_next_planning_date(date(2023, 2, 28), 20) == date(2023, 3, 20)
+
+
+def test_get_next_planning_30th_of_month():
+    assert _get_next_planning_date(date(2023, 1, 1), 30) == date(2023, 1, 30)
+    assert _get_next_planning_date(date(2023, 1, 15), 30) == date(2023, 1, 30)
+    assert _get_next_planning_date(date(2023, 1, 30), 30) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 1, 31), 30) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 2, 1), 30) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 2, 15), 30) == date(2023, 2, 28)
+    assert _get_next_planning_date(date(2023, 2, 28), 30) == date(2023, 3, 30)

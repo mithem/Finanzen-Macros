@@ -10,6 +10,7 @@ requirements = [
     "mypy",
     "pytest",
     "pytest-cov",
+    "python-dateutil",
 ]
 
 with open("requirements.txt", "w", encoding="utf-8") as f:
