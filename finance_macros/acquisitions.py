@@ -1,18 +1,20 @@
 # coding: utf-8
 """Acquisition budgeting."""
-from datetime import date, datetime, timedelta
+import calendar
+from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional, Type, Callable, Any, Tuple
+from typing import List, Optional, Type, Callable, Any, Tuple, Union
+
+from dateutil.relativedelta import relativedelta
 
 ROW_START_IDX = 6
 COLUMN_START_IDX = 0
 # {column_name: (attribute_name, data_type, column_index)}
-COLUMNS = {"Name": ("name", str, 0), "Startdatum": ("start_date", date, 1),
+COLUMNS = {"Name": ("name", str, 0), "Startdatum": ("start_date", Optional[date], 1),
            "Zieldatum": ("target_date", Optional[date], 2),
            "Startbudget": ("start_budget", float, 3), "Zielbudget": ("target_budget", float, 4),
            "Davon allokiert": ("budget_acquired", float, 5), "Entsprechend verfügbar": None,
            "Anteil": None, "Gewichtung": ("weight", int, 8), "Debug": (None, str, 9), }
-PLANNING_DAY_OF_MONTH = 1
 LIBRE_OFFICE_DATE_FORMAT = "%d.%m.%y"
 
 try:
@@ -25,23 +27,40 @@ try:
     MONTHLY_BUDGET_CELL = sheet.getCellByPosition(12, 11)
     START_BUDGET_CELL = sheet.getCellByPosition(13, 3)
     ALREADY_ALLOCATED_WITHOUT_PLANNING_START_BUDGET_CELL = sheet.getCellByPosition(12, 5)
+    PLANNING_DAY_OF_MONTH_CELL = sheet.getCellByPosition(12, 16)
 except NameError:
     pass  # running tests
 
 
-def _get_next_planning_date(planning_date: date) -> date:
-    """Return the next planning date after the given planning date."""
-    tmp = planning_date + timedelta(days=32)
-    return date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
+def _get_day_of_month_of_planning_date(planning_month: date, planning_day_of_month: int) -> int:
+    """Return the day of month of the given planning date."""
+    day_count = calendar.monthrange(planning_month.year, planning_month.month)[1]
+    if planning_day_of_month > 0:
+        return min(planning_day_of_month, day_count)
+    return int(planning_day_of_month) if planning_day_of_month > 0 \
+        else day_count + planning_day_of_month + 1
 
 
-def _planning_date_count_between(date1: date, date2: date):
+def _get_next_planning_date(current_date: date, planning_day_of_month: int) -> date:
+    """Return the next planning date after the given current date."""
+    this_months_planning = date(year=current_date.year, month=current_date.month,
+                                day=_get_day_of_month_of_planning_date(current_date,
+                                                                       planning_day_of_month))
+    if this_months_planning > current_date:
+        return this_months_planning
+    approximately_next_planning = current_date + relativedelta(months=1)
+    return date(year=approximately_next_planning.year, month=approximately_next_planning.month,
+                day=_get_day_of_month_of_planning_date(approximately_next_planning,
+                                                       planning_day_of_month))
+
+
+def _planning_date_count_between(date1: date, date2: date, planning_day_of_month: int) -> int:
     """Return the number of planning dates between the two given dates."""
     counter = 0
     planning_date = date1
     while planning_date < date2:
         counter += 1
-        planning_date = _get_next_planning_date(planning_date)
+        planning_date = _get_next_planning_date(planning_date, planning_day_of_month)
     return counter
 
 
@@ -52,12 +71,13 @@ class BaseAcquisition:
     start_budget: float
     target_budget: float
     budget_acquired: float
-    start_date: date
+    start_date: Optional[date]
     target_date: Optional[date]
     weight: int
 
     # pylint: disable=too-many-arguments
-    def __init__(self, name: str, start_budget: float, target_budget: float, start_date: date,
+    def __init__(self, name: str, start_budget: float, target_budget: float,
+                 start_date: Optional[date],
                  target_date: Optional[date],
                  weight: int, ):
         self.name = name
@@ -68,11 +88,14 @@ class BaseAcquisition:
         self.target_date = target_date
         self.weight = weight
 
-    def request_budget(self, current_date: Optional[date] = None):
+    def request_budget(
+            self,
+            planning_date: Optional[date] = None
+    ):
         """Return the amount of budget that is still needed to reach the target budget."""
         if self.weight == 0:
             return 0
-        if current_date and self.start_date > current_date:
+        if self.start_date and planning_date and self.start_date > planning_date:
             return 0
         return self.target_budget - self.budget_acquired
 
@@ -92,11 +115,19 @@ weight={self.weight})"
     def __repr__(self):
         return str(self)
 
-    def planning_dates_until_target_date(self) -> Optional[int]:
+    def planning_dates_until_target_date(self, planning_day_of_month: int) -> Optional[int]:
         """Return the number of planning dates until the target date."""
-        if not self.target_date:
+        if not self.start_date or not self.target_date:
             return None
-        return _planning_date_count_between(self.start_date, self.target_date)
+        return _planning_date_count_between(
+            self.start_date,
+            self.target_date,
+            planning_day_of_month
+        )
+
+    def start_date_sorting_key(self) -> Union[date, int]:
+        """Return key used for sorting acquisitions by start date."""
+        return self.start_date if self.start_date else 0
 
 
 class BasePlanning:
@@ -112,23 +143,33 @@ class BasePlanning:
     start_budget: float
     today: date  # for testing
     _planning_dates: List[date]
+    planning_day_of_month: int
 
-    def __init__(self, acquisitions: List[BaseAcquisition], monthly_budget: float,
-                 start_budget: float, today: Optional[date] = None, ):
+    # pylint: disable=too-many-arguments
+    def __init__(
+            self,
+            acquisitions: List[BaseAcquisition],
+            monthly_budget: float,
+            start_budget: float,
+            today: Optional[date] = None,
+            planning_day_of_month: int = 1
+    ):
         self.acquisitions = acquisitions
         self.monthly_budget = monthly_budget
         self.sum_of_weights = sum(acquisition.weight for acquisition in self.acquisitions)
         self.start_budget = start_budget
         self.today = today or date.today()
         self._planning_dates = []
+        self.planning_day_of_month = planning_day_of_month
 
     def sum_of_relevant_weights_at_planning_date(self, planning_date: date):
         """Return the sum of weights of all acquisitions that are relevant
         for the given planning date."""
         return sum(acquisition.weight for acquisition in
                    filter(
-                       lambda a: a.start_date <= planning_date and a.request_budget(planning_date),
-                       self.acquisitions, ))
+                       lambda a: a.request_budget(planning_date),
+                       self.acquisitions)
+                   )
 
     def sum_of_relevant_weights(self, planning_date: date):
         """Return the sum of weights of all acquisitions that are relevant"""
@@ -141,14 +182,20 @@ class BasePlanning:
 
     def get_earliest_planning_date(self) -> Optional[date]:
         """Return the earliest relevant planning date for this planning."""
-        earliest_start_date = min(acquisition.start_date for acquisition in self.acquisitions)
-        earliest_planning_day = date(earliest_start_date.year, earliest_start_date.month,
-                                     PLANNING_DAY_OF_MONTH)
+        earliest_start_date = min(acquisition.start_date for acquisition in  # type: ignore
+                                  filter(lambda a: a.start_date is not None, self.acquisitions))
+        if earliest_start_date is None:
+            earliest_start_date = self.today
+        if earliest_start_date.day == _get_day_of_month_of_planning_date(
+                earliest_start_date,
+                self.planning_day_of_month
+        ) and earliest_start_date.month == earliest_start_date.month and \
+                earliest_start_date.year == earliest_start_date.year:
+            return earliest_start_date
+        earliest_planning_day = _get_next_planning_date(earliest_start_date,
+                                                        self.planning_day_of_month)
         if earliest_start_date == self.today:
             return None
-        if earliest_planning_day < earliest_start_date:
-            tmp = earliest_planning_day + timedelta(days=32)
-            earliest_planning_day = date(year=tmp.year, month=tmp.month, day=PLANNING_DAY_OF_MONTH)
         return earliest_planning_day
 
     def call_at_each_planning_date(self, callback: Callable[[date], None]):
@@ -160,7 +207,7 @@ class BasePlanning:
         while planning_date <= self.today:
             self._planning_dates.append(planning_date)
             callback(planning_date)
-            planning_date = _get_next_planning_date(planning_date)
+            planning_date = _get_next_planning_date(planning_date, self.planning_day_of_month)
 
 
 class BasePlanningWeightedMonthlyContribution(BasePlanning):
@@ -171,9 +218,9 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
         """Allocate budget to all acquisitions that are relevant for the given planning date."""
         if budget == 0:
             return
-        extra_budget = 0
+        remaining_budget = budget
         for acquisition in self.acquisitions:
-            if acquisition.start_date > planning_date:
+            if acquisition.start_date and acquisition.start_date > planning_date:
                 continue
             requested_budget = acquisition.request_budget(planning_date)
             if requested_budget > 0:
@@ -181,17 +228,20 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
                     0.0,
                     budget * acquisition.weight / sum_of_weights_at_planning_date
                 )
-                budget_to_allocate = min(available_budget, requested_budget)
+                budget_to_allocate = min(remaining_budget, available_budget, requested_budget)
                 acquisition.allocate_budget(budget_to_allocate)
-                extra_budget += available_budget - budget_to_allocate
-        if extra_budget:
+                remaining_budget -= budget_to_allocate
+        if 0 < remaining_budget < budget:
             # needs to be recalculated if extra_budget is available as some acquisition is fully
             # funded and therefore doesn't apply anymore
-            self.allocate_budget(extra_budget, planning_date,
+            self.allocate_budget(remaining_budget, planning_date,
                                  self.sum_of_relevant_weights_at_planning_date(planning_date))
 
     def allocate_planning_start_budget(self, budget: float):
         """Allocate the planning's start budget to all acquisitions, depending on their weight."""
+        # planning_date = self.get_earliest_planning_date()
+        # return self.allocate_budget(budget, planning_date,
+        # self.sum_of_relevant_weights_at_planning_date(planning_date))
         extra_budget = 0
         sum_of_weights = self.sum_of_relevant_weights(self.today)
         for acquisition in self.acquisitions:
@@ -277,7 +327,7 @@ class BasePlanningBaseSequentialAcquisition(BasePlanning):
                 acquisition_sequence,
                 acq_idx
             )
-            planning_date = _get_next_planning_date(planning_date)
+            planning_date = _get_next_planning_date(planning_date, self.planning_day_of_month)
 
 
 class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
@@ -288,7 +338,7 @@ class BasePlanningDatedSequentialAcquisition(BasePlanningBaseSequentialAcquisiti
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
         budget_sorted = sorted(name_sorted, key=lambda a: a.target_budget)
         weight_sorted = sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
-        return sorted(weight_sorted, key=lambda a: a.start_date)
+        return sorted(weight_sorted, key=lambda a: a.start_date_sorting_key())
 
 
 class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquisition):
@@ -298,7 +348,7 @@ class BasePlanningWeightedSequentialAcquisition(BasePlanningBaseSequentialAcquis
     def get_acquisition_sequence(self) -> List[BaseAcquisition]:
         # sort by weight, then budget, then date, then name
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
-        date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
+        date_sorted = sorted(name_sorted, key=lambda a: a.start_date_sorting_key())
         budget_sorted = sorted(date_sorted, key=lambda a: a.target_budget)
         return sorted(budget_sorted, key=lambda a: a.weight, reverse=True)
 
@@ -313,7 +363,7 @@ class BasePlanningBudgetOrientedSequentialAcquisition(BasePlanningBaseSequential
     def get_acquisition_sequence(self) -> List[BaseAcquisition]:
         # sort by budget, then weight, then date, then name
         name_sorted = sorted(self.acquisitions, key=lambda a: a.name)
-        date_sorted = sorted(name_sorted, key=lambda a: a.start_date)
+        date_sorted = sorted(name_sorted, key=lambda a: a.start_date_sorting_key())
         weight_sorted = sorted(date_sorted, key=lambda a: a.weight, reverse=True)
         return sorted(weight_sorted, key=lambda a: a.target_budget, reverse=not self.ascending)
 
@@ -360,7 +410,7 @@ class BasePlanningTargetDate(BasePlanning):
     ) -> Tuple[float, List[BaseAcquisition]]:
         """Return the amount of budget that acquisitions require which have no
         end date scheduled."""
-        acqs = list(filter(lambda a: a.target_date is None, acquisitions))
+        acqs = list(filter(lambda a: a.target_date is None or a.start_date is None, acquisitions))
         return sum(map(lambda a: a.request_budget(planning_date), acqs)), acqs
 
     def allocate_budget(self, budget: float, planning_date: date):
@@ -372,21 +422,24 @@ class BasePlanningTargetDate(BasePlanning):
 
         # Allocate budget to acquisitions without a target date
         planning = BasePlanningWeightedMonthlyContribution(immediate_acquisitions, 0, 0, self.today)
-        budget_to_allocate = min(remaining_budget, immediate_allocation_budget)
+        budget_to_allocate = max(0.0, min(remaining_budget, immediate_allocation_budget))
         planning.allocate_budget(budget_to_allocate, self.today,
                                  planning.sum_of_relevant_weights_at_planning_date(self.today))
         remaining_budget -= budget_to_allocate
 
         for acq in acquisitions:
             requested = acq.request_budget(planning_date)
-            num_planning_dates = acq.planning_dates_until_target_date()
+            num_planning_dates = acq.planning_dates_until_target_date(self.planning_day_of_month)
             if num_planning_dates is None or num_planning_dates == 0:
                 num_planning_dates = 1
-            allocation_deficit = \
-                (acq.target_budget - acq.start_budget) / num_planning_dates \
-                * _planning_date_count_between(
-                    acq.start_date, planning_date
-                ) - acq.budget_acquired + acq.start_budget
+            if acq.start_date:
+                allocation_deficit = \
+                    (acq.target_budget - acq.start_budget) / num_planning_dates \
+                    * _planning_date_count_between(
+                        acq.start_date, planning_date, self.planning_day_of_month
+                    ) - acq.budget_acquired + acq.start_budget
+            else:
+                allocation_deficit = requested
             to_allocate = max(
                 0.0,
                 min(
@@ -398,6 +451,9 @@ class BasePlanningTargetDate(BasePlanning):
             )
             acq.allocate_budget(to_allocate)
             remaining_budget -= to_allocate
+
+        if 0 < remaining_budget < budget:  # avoid recursion
+            self.allocate_budget(remaining_budget, planning_date)
 
     def calculate_acquired_budgets(self):
         earliest_planning_date = self.get_earliest_planning_date()
@@ -480,7 +536,9 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
             today = datetime.strptime(value, LIBRE_OFFICE_DATE_FORMAT).date()
         if start_budget is None:
             start_budget = START_BUDGET_CELL.getValue()
-        super().__init__(acquisitions, monthly_budget, start_budget, today=today)
+        day_of_month = int(PLANNING_DAY_OF_MONTH_CELL.getValue())
+        super().__init__(acquisitions, monthly_budget, start_budget, today=today,
+                         planning_day_of_month=day_of_month)
 
     @staticmethod
     def get_acquisitions():
@@ -491,8 +549,7 @@ class SpreadsheetPlanning(BasePlanning):  # pylint: disable=abstract-method
             name = sheet.getCellByPosition(COLUMN_START_IDX, row).getString()
             if name:
                 acquisition = SpreadsheetAcquisition(row)
-                if acquisition.start_date:
-                    acquisitions.append(acquisition)
+                acquisitions.append(acquisition)
         return acquisitions
 
     def write_values(self):
@@ -610,7 +667,8 @@ class PlanningMode(Enum):
         return mode
 
 
-def _calculate_budgets_of_type(PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
+def _calculate_budgets_of_type(
+        PlanningType: Type[SpreadsheetPlanning], ):  # pylint: disable=invalid-name
     """Calculate the acquired budgets for the given planning mode."""
     planning_without_start_budget = PlanningType(start_budget=0)
     planning_without_start_budget.calculate_acquired_budgets()
