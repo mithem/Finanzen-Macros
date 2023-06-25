@@ -276,9 +276,9 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_interim_uses_
         today=today,
     )
     planning.calculate_acquired_budgets()
-    assert acquisition1.budget_acquired == 90 + 2.5
+    assert acquisition1.budget_acquired == 92.5
     assert acquisition2.budget_acquired == 50
-    assert acquisition3.budget_acquired == 90 + 7.5
+    assert acquisition3.budget_acquired == 97.5
 
 
 def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_interim():
@@ -313,9 +313,7 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_interim():
     planning.calculate_acquired_budgets()
     assert acquisition1.budget_acquired == 100
     assert acquisition2.budget_acquired == 50
-    march = 97.5
-    april = 60 - 7.5
-    assert acquisition3.budget_acquired == march + april  # 150
+    assert acquisition3.budget_acquired == 150
 
 
 def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_after_end():
@@ -350,7 +348,7 @@ def test_wmcplanning_calculate_acquired_budgets_three_acquisitions_after_end():
     planning.calculate_acquired_budgets()
     assert acquisition1.budget_acquired == 100
     assert acquisition2.budget_acquired == 50
-    assert acquisition3.budget_acquired == 150 + 60 * 3
+    assert acquisition3.budget_acquired == 330
     assert _sum_acquired_budgets(acquisition1, acquisition2, acquisition3) == 480
 
 
@@ -1200,6 +1198,44 @@ def test_target_date_planning_no_negative_allocation():
 
     assert_round(a1.budget_acquired, 0)
     assert_round(a2.budget_acquired, 0)
+
+
+def test_target_date_planning_6():
+    a1 = BaseAcquisition("A", 0, 750, date(2023, 5, 15), date(2024, 5, 1), 1)
+    a2 = BaseAcquisition("B", 0, 120, date(2023, 5, 15), date(2023, 10, 1), 2)
+    a3 = BaseAcquisition("C", 0, 130, None, None, 6)
+    a4 = BaseAcquisition("D", 0, 120, None, None, 0)
+    a5 = BaseAcquisition("E", 0, 55, None, None, 5)
+    a6 = BaseAcquisition("F", 0, 20, None, None, 5)
+    a7 = BaseAcquisition("G", 0, 55, None, None, 5)
+    a8 = BaseAcquisition("H", 0, 35, None, None, 5)
+    a9 = BaseAcquisition("I", 0, 35, None, None, 5)
+    a10 = BaseAcquisition("J", 0, 15, None, None, 5)
+    a11 = BaseAcquisition("K", 0, 25, None, None, 5)
+    a12 = BaseAcquisition("L", 0, 10, None, None, 5)
+    a13 = BaseAcquisition("M", 0, 10, None, None, 5)
+    a14 = BaseAcquisition("N", 0, 15, None, None, 5)
+    a15 = BaseAcquisition("O", 0, 220.32, date(2023, 6, 21), date(2024, 1, 1), 10)
+    acquisitions = [a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15]
+
+    planning = BasePlanningTargetDate(acquisitions, 203.1, 455.66, date(2023, 6, 25), 26)
+    planning.calculate_acquired_budgets()
+
+    assert_round(a1.budget_acquired, 115.38)
+    assert_round(a2.budget_acquired, 40)
+    assert_round(a3.budget_acquired, 130)
+    assert_round(a4.budget_acquired, 0)
+    assert_round(a5.budget_acquired, 55)
+    assert_round(a6.budget_acquired, 20)
+    assert_round(a7.budget_acquired, 55)
+    assert_round(a8.budget_acquired, 35)
+    assert_round(a9.budget_acquired, 35)
+    assert_round(a10.budget_acquired, 15)
+    assert_round(a11.budget_acquired, 25)
+    assert_round(a12.budget_acquired, 10)
+    assert_round(a13.budget_acquired, 10)
+    assert_round(a14.budget_acquired, 15)
+    assert_round(a15.budget_acquired, 0)
 
 
 def test_get_earliest_planning_date():

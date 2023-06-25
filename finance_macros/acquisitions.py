@@ -167,10 +167,7 @@ class BasePlanning:
         for the given planning date."""
         return sum(acquisition.weight for acquisition in
                    filter(
-                       lambda a: (a.start_date is None or (
-                               a.start_date is not None
-                               and a.start_date <= planning_date
-                               and a.request_budget(planning_date))),
+                       lambda a: a.request_budget(planning_date),
                        self.acquisitions)
                    )
 
@@ -221,7 +218,7 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
         """Allocate budget to all acquisitions that are relevant for the given planning date."""
         if budget == 0:
             return
-        extra_budget = 0
+        remaining_budget = budget
         for acquisition in self.acquisitions:
             if acquisition.start_date and acquisition.start_date > planning_date:
                 continue
@@ -231,17 +228,20 @@ class BasePlanningWeightedMonthlyContribution(BasePlanning):
                     0.0,
                     budget * acquisition.weight / sum_of_weights_at_planning_date
                 )
-                budget_to_allocate = min(available_budget, requested_budget)
+                budget_to_allocate = min(remaining_budget, available_budget, requested_budget)
                 acquisition.allocate_budget(budget_to_allocate)
-                extra_budget += available_budget - budget_to_allocate
-        if extra_budget:
+                remaining_budget -= budget_to_allocate
+        if 0 < remaining_budget < budget:
             # needs to be recalculated if extra_budget is available as some acquisition is fully
             # funded and therefore doesn't apply anymore
-            self.allocate_budget(extra_budget, planning_date,
+            self.allocate_budget(remaining_budget, planning_date,
                                  self.sum_of_relevant_weights_at_planning_date(planning_date))
 
     def allocate_planning_start_budget(self, budget: float):
         """Allocate the planning's start budget to all acquisitions, depending on their weight."""
+        # planning_date = self.get_earliest_planning_date()
+        # return self.allocate_budget(budget, planning_date,
+        # self.sum_of_relevant_weights_at_planning_date(planning_date))
         extra_budget = 0
         sum_of_weights = self.sum_of_relevant_weights(self.today)
         for acquisition in self.acquisitions:
@@ -422,7 +422,7 @@ class BasePlanningTargetDate(BasePlanning):
 
         # Allocate budget to acquisitions without a target date
         planning = BasePlanningWeightedMonthlyContribution(immediate_acquisitions, 0, 0, self.today)
-        budget_to_allocate = min(remaining_budget, immediate_allocation_budget)
+        budget_to_allocate = max(0.0, min(remaining_budget, immediate_allocation_budget))
         planning.allocate_budget(budget_to_allocate, self.today,
                                  planning.sum_of_relevant_weights_at_planning_date(self.today))
         remaining_budget -= budget_to_allocate
