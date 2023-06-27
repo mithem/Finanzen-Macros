@@ -6,3 +6,7 @@ mypy
 pytest
 pytest-cov
 python-dateutil
+jupyter
+pandas
+plotly
+nbstripout

@@ -11,6 +11,10 @@ requirements = [
     "pytest",
     "pytest-cov",
     "python-dateutil",
+    "jupyter",
+    "pandas",
+    "plotly",
+    "nbstripout"
 ]
 
 with open("requirements.txt", "w", encoding="utf-8") as f:
