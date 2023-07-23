@@ -55,10 +55,11 @@ def get_stock_quotes(depot_composition_history: pd.DataFrame) -> pd.DataFrame:
                                 constant_values=sheet[position]["prices"][0]["close"])
     df = pd.DataFrame()
     position = list(sheet.keys())[0]
-    df[DATE_COLUMN] = [
+    df[DATE_COLUMN] = np.pad([
         pd.Timestamp.fromisoformat(sheet[position]["prices"][i]["formatted_date"]) for i
         in
-        range(len(sheet[position]["prices"]))]
+        range(len(sheet[position]["prices"]))], (max_count - len(sheet[position]["prices"]), 0),
+        constant_values=sheet[position]["prices"][0]["formatted_date"])
     for position in positions:
         df[position] = data[position]
     return df
@@ -101,7 +102,10 @@ def get_depot_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataFrame
     values_history[DATE_COLUMN] = composition_history[DATE_COLUMN]
     for position in composition.keys()[1:]:
         values_history[position] = composition_history[position] * quotes_history[position]
-    composition_end_idx = list(composition_history[DATE_COLUMN]).index(end_date)
+    try:
+        composition_end_idx = list(composition_history[DATE_COLUMN]).index(end_date)
+    except ValueError:
+        composition_end_idx = len(composition_history[DATE_COLUMN]) - 1
     composition_history = composition_history.iloc[:composition_end_idx]
     values_history = values_history.iloc[:composition_end_idx]
     return composition_history, quotes_history, values_history
