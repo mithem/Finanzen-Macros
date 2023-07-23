@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import Tuple, List, Optional
 
 import numpy as np
@@ -18,8 +19,9 @@ def get_avg_return_scenario(data: pd.DataFrame, avg_return: float, data_key: str
         (i / 365)) for i in days_list]
 
 
-def load_net_worth_history(filename: str) -> Tuple[pd.DataFrame, float]:
+def get_net_worth_history(export_directory: str) -> Tuple[pd.DataFrame, float]:
     """Load data from csv file and return it as a pandas dataframe"""
+    filename = os.path.join(export_directory, "net_worth_history.csv")
     df = pd.read_csv(filename, sep=";", decimal=".", parse_dates=[DATE_COLUMN],
                      date_format=DATE_FORMAT)
     avg_return = (df["Depotwert"].iloc[-1] / df["Depotwert"].iloc[0]) ** (
@@ -29,18 +31,21 @@ def load_net_worth_history(filename: str) -> Tuple[pd.DataFrame, float]:
     return df, avg_return
 
 
-def load_depot_proposition_history(filename: str) -> pd.DataFrame:
+def get_depot_composition_history(export_directory: str) -> pd.DataFrame:
     """Load data from csv file and return it as a pandas dataframe"""
+    filename = os.path.join(export_directory, "depot_composition_history.csv")
     df = pd.read_csv(filename, sep=";", decimal=".", parse_dates=[DATE_COLUMN],
                      date_format=DATE_FORMAT)
     return df
 
 
-def get_stock_quotes(depot_proposition_history: pd.DataFrame) -> pd.DataFrame:
-    """Load stock quotes for the stocks in the depot proposition from yahoo."""
-    positions = list(depot_proposition_history.keys()[1:])
+def get_stock_quotes(depot_composition_history: pd.DataFrame) -> pd.DataFrame:
+    """Load stock quotes for the stocks in the depot composition from yahoo."""
+    positions = list(depot_composition_history.keys()[1:])
     fin = YahooFinancials(positions, country="DE")
-    sheet = fin.get_historical_price_data("2021-01-01", datetime.date.today().isoformat(), "daily")
+    sheet = fin.get_historical_price_data(
+        depot_composition_history[DATE_COLUMN].iloc[0].date().isoformat(),
+        datetime.date.today().isoformat(), "daily")
     data = {}
     max_count = max([len(sheet[position]["prices"]) for position in positions])
     for position in positions:
@@ -85,15 +90,18 @@ def interpolate_data_nonlinear(data: pd.DataFrame, start_date: Optional[pd.Times
     return pd.DataFrame(new_data)
 
 
-def get_depot_history() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    proposition = load_depot_proposition_history("~/Desktop/depot_proposition.csv")
-    quotes = get_stock_quotes(proposition)
-    start_date = proposition[DATE_COLUMN].iloc[0]
-    end_date = proposition[DATE_COLUMN].iloc[-1]
-    proposition_history = interpolate_data_nonlinear(proposition)
+def get_depot_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    composition = get_depot_composition_history(export_directory)
+    start_date = composition[DATE_COLUMN].iloc[0]
+    quotes = get_stock_quotes(composition)
+    end_date = quotes[DATE_COLUMN].iloc[-1]
+    composition_history = interpolate_data_nonlinear(composition)
     quotes_history = interpolate_data_nonlinear(quotes, start_date, end_date)
     values_history = pd.DataFrame()
-    values_history[DATE_COLUMN] = proposition_history[DATE_COLUMN]
-    for position in proposition.keys()[1:]:
-        values_history[position] = proposition_history[position] * quotes_history[position]
-    return proposition_history, quotes_history, values_history
+    values_history[DATE_COLUMN] = composition_history[DATE_COLUMN]
+    for position in composition.keys()[1:]:
+        values_history[position] = composition_history[position] * quotes_history[position]
+    composition_end_idx = list(composition_history[DATE_COLUMN]).index(end_date)
+    composition_history = composition_history.iloc[:composition_end_idx]
+    values_history = values_history.iloc[:composition_end_idx]
+    return composition_history, quotes_history, values_history
