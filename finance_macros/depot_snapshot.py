@@ -17,11 +17,11 @@ except NameError:  # running tests
     EXPORT_DIRECTORY = "~/"
 
 
-def snapshot_depot_proposition(*args):
-    """Snapshot the current depot proposition and add it to the depot proposition history table."""
+def snapshot_depot_composition(*args):
+    """Snapshot the current depot composition and add it to the depot composition history table."""
     positions = _get_positions()
     new_row = _get_new_row()
-    _write_depot_proposition(positions, new_row)
+    _write_depot_composition(positions, new_row)
     _write_current_date(new_row)
 
 
@@ -34,7 +34,7 @@ def _write_current_date(row: int):
     sheet.getCellByPosition(DATE_COLUMN, row).setValue(_date_value(datetime.date.today()))
 
 
-def _write_depot_proposition(positions, new_row: int):
+def _write_depot_composition(positions, new_row: int):
     for i in range(len(positions)):
         sheet.getCellByPosition(DATE_COLUMN + i + 1, new_row).setValue(
             _get_share_count(positions[i]))
@@ -50,7 +50,7 @@ def _get_new_row():
 
 
 def write_csv(*args):
-    with open(os.path.join(EXPORT_DIRECTORY, "depot_proposition.csv"), "w") as f:
+    with open(os.path.join(EXPORT_DIRECTORY, "depot_composition_history.csv"), "w") as f:
         positions = _get_positions()
         f.write("Datum")
         for position in positions:
