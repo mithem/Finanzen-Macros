@@ -219,3 +219,7 @@ def get_depot_value_gauge(net_worth_history: pd.DataFrame):
         }
     ))
     return fig
+
+
+def get_stock_quote_line(quote_history: pd.DataFrame) -> go.Figure:
+    return px.line(quote_history, x=DATE_COLUMN, y=quote_history.keys()[1:], title="Quotes")

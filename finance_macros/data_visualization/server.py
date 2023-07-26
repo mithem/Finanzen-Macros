@@ -7,7 +7,7 @@ from finance_macros.data_visualization import get_net_worth_history, get_depot_h
 from finance_macros.data_visualization import graphs
 
 parser = argparse.ArgumentParser()
-parser.add_argument("export_directory",
+parser.add_argument("--export-directory", "-e", required=True,
                     help="The directory where the exports are stored.")
 args = parser.parse_args()
 
@@ -74,6 +74,10 @@ def depot_value_gauge():
     return mg(graphs.get_depot_value_gauge(net_worth_history), style={"width": "33%"})
 
 
+def stock_quotes_line():
+    return mg(graphs.get_stock_quote_line(quote_history))
+
+
 app.layout = html.Div([
     html.H1("Net Worth Dashboard"),
     html.Div([
@@ -104,7 +108,12 @@ app.layout = html.Div([
                 depot_value_history_area(),
                 depot_value_history_line()
             ])
-        ])
+        ]),
+        dcc.Tab(label="Stock Quotes", children=[
+            html.Div([
+                stock_quotes_line()
+            ])
+        ]),
     ])
 ], style={"font-family": "'Open Sans', verdana, arial, sans-serif"})
 
