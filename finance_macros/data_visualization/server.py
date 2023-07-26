@@ -1,5 +1,6 @@
 import argparse
 
+import darkdetect
 from dash import Dash, html, dcc
 from dash.dcc import Graph
 
@@ -14,12 +15,19 @@ args = parser.parse_args()
 net_worth_history, avg_return = get_net_worth_history(args.export_directory)
 composition_history, quote_history, value_history = get_depot_history(args.export_directory)
 
+DARK_MODE = darkdetect.isDark()
+BACKGROUND_COLOR = "black" if DARK_MODE else "#FFFFFF"
+FONT_COLOR = "white" if DARK_MODE else "black"
+
 app = Dash(__name__)
+app.title = "Net Worth Dashboard"
 
 
 def mg(fig, style: dict = None):
     if style is None:
         style = {}
+    if DARK_MODE:
+        fig.layout.template = "plotly_dark"
     return Graph(figure=fig, style=style)
 
 
@@ -115,7 +123,8 @@ app.layout = html.Div([
             ])
         ]),
     ])
-], style={"font-family": "'Open Sans', verdana, arial, sans-serif"})
+], style={"font-family": "'Open Sans', verdana, arial, sans-serif",
+          "background-color": BACKGROUND_COLOR, "color": FONT_COLOR})
 
 if __name__ == "__main__":
     app.run_server(debug=True)
