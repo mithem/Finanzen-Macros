@@ -1,12 +1,13 @@
-numpy
-tox==4.*
+numpy==1.25.1
+tox==4.6.4
 pylint_exit
 pylint
-mypy
+mypy==1.4.1
 pytest
 pytest-cov
 python-dateutil
 jupyter
-pandas
+pandas==2.0.3
 plotly
 nbstripout
+yahoofinancials
