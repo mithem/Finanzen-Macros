@@ -96,16 +96,12 @@ def get_depot_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataFrame
     start_date = composition[DATE_COLUMN].iloc[0]
     quotes = get_stock_quotes(composition)
     end_date = quotes[DATE_COLUMN].iloc[-1]
-    composition_history = interpolate_data_nonlinear(composition)
+
+    composition_history = interpolate_data_nonlinear(composition, start_date, end_date)
     quotes_history = interpolate_data_nonlinear(quotes, start_date, end_date)
+
     values_history = pd.DataFrame()
     values_history[DATE_COLUMN] = composition_history[DATE_COLUMN]
     for position in composition.keys()[1:]:
         values_history[position] = composition_history[position] * quotes_history[position]
-    try:
-        composition_end_idx = list(composition_history[DATE_COLUMN]).index(end_date)
-    except ValueError:
-        composition_end_idx = len(composition_history[DATE_COLUMN]) - 1
-    composition_history = composition_history.iloc[:composition_end_idx]
-    values_history = values_history.iloc[:composition_end_idx]
     return composition_history, quotes_history, values_history
