@@ -1,3 +1,4 @@
+"""Snapshot the current depot composition and add it to the depot composition history table."""
 import datetime
 import os
 
@@ -7,6 +8,8 @@ PORTFOLIO_FIRST_ROW = 32
 PORTFOLIO_IDENTIFIER_COLUMN = 3
 PORTFOLIO_SHARE_COUNT_COLUMN = 8
 
+# can't import a utility function from another module because LibreOffice disallows it
+# pylint: disable=duplicate-code
 try:
     # pylint: disable=undefined-variable
     desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
@@ -17,7 +20,7 @@ except NameError:  # running tests
     EXPORT_DIRECTORY = "~/"
 
 
-def snapshot_depot_composition(*args):
+def snapshot_depot_composition(*args):  # pylint: disable=unused-argument
     """Snapshot the current depot composition and add it to the depot composition history table."""
     positions = _get_positions()
     new_row = _get_new_row()
@@ -35,7 +38,7 @@ def _write_current_date(row: int):
 
 
 def _write_depot_composition(positions, new_row: int):
-    for i in range(len(positions)):
+    for i in range(len(positions)):  # pylint: disable=consider-using-enumerate
         sheet.getCellByPosition(DATE_COLUMN + i + 1, new_row).setValue(
             _get_share_count(positions[i]))
 
@@ -49,25 +52,27 @@ def _get_new_row():
     return row
 
 
-def write_csv(*args):
-    with open(os.path.join(EXPORT_DIRECTORY, "depot_composition_history.csv"), "w") as f:
+def write_csv(*args):  # pylint: disable=unused-argument
+    """Write the depot composition history to a csv file."""
+    with open(os.path.join(EXPORT_DIRECTORY, "depot_composition_history.csv"), "w",
+              encoding="utf-8") as file:
         positions = _get_positions()
-        f.write("Datum")
+        file.write("Datum")
         for position in positions:
-            f.write(";" + position)
-        f.write("\n")
+            file.write(";" + position)
+        file.write("\n")
         row = HEADER_ROW + 1
         date = sheet.getCellByPosition(DATE_COLUMN, row).getString()
         while date:
-            f.write(date)
+            file.write(date)
             for i in range(len(positions)):
-                f.write(";" + str(sheet.getCellByPosition(DATE_COLUMN + i + 1, row).getValue()))
-            f.write("\n")
+                file.write(";" + str(sheet.getCellByPosition(DATE_COLUMN + i + 1, row).getValue()))
+            file.write("\n")
             row += 1
             date = sheet.getCellByPosition(DATE_COLUMN, row).getString()
 
 
-def _get_share_count(position: str):
+def _get_share_count(position: str) -> float:
     i = 0
     value = sheet.getCellByPosition(PORTFOLIO_IDENTIFIER_COLUMN,
                                     PORTFOLIO_FIRST_ROW + i).getString()
@@ -78,6 +83,7 @@ def _get_share_count(position: str):
         i += 1
         value = sheet.getCellByPosition(PORTFOLIO_IDENTIFIER_COLUMN,
                                         PORTFOLIO_FIRST_ROW + i).getString()
+    return -1
 
 
 def _get_positions():

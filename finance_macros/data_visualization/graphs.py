@@ -1,3 +1,4 @@
+"""Plotly graphs for the finance visualizations."""
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
@@ -32,6 +33,7 @@ def get_fortune_history_line_plot(net_worth_history: pd.DataFrame, avg_return: f
 
 
 def get_fortune_history_area_plot(net_worth_history: pd.DataFrame) -> go.Figure:
+    """Get an area plot of the fortune history."""
     fig = px.area(net_worth_history, x=DATE_COLUMN, y=["Depotwert", "Davon nicht Depot"],
                   title="Depotwert")
     fig.add_trace(
@@ -42,6 +44,7 @@ def get_fortune_history_area_plot(net_worth_history: pd.DataFrame) -> go.Figure:
 
 
 def get_current_net_worth_composition_pie(net_worth_history: pd.DataFrame) -> go.Figure:
+    """Get a pie chart of the current net worth composition."""
     labels = ["Depotwert", "Davon nicht Depot"]
     display_values = [net_worth_history["Depotwert"].iloc[-1],
                       net_worth_history["Davon nicht Depot"].iloc[-1]]
@@ -52,16 +55,17 @@ def get_current_net_worth_composition_pie(net_worth_history: pd.DataFrame) -> go
 
 
 def get_depot_value_fluctuation_histogram(net_worth_history: pd.DataFrame) -> go.Figure:
+    """Get a histogram of the depot value fluctuations."""
     delta_depot_value = net_worth_history["Depotwert"].diff()
     delta_depot_value = delta_depot_value[1:]
     stddev = delta_depot_value.std()
     median = delta_depot_value.median()
     mean = delta_depot_value.mean()
 
-    def calculate_share_of_values_being_within_stddev(k) -> float:
+    def calculate_share_of_values_being_within_stddev(n) -> float:  # pylint: disable=invalid-name
         return len(
             [i for i in delta_depot_value if
-             median - k * stddev <= i <= median + k * stddev]) / len(
+             median - n * stddev <= i <= median + n * stddev]) / len(
             delta_depot_value)
 
     depot_value_fluctuations = sorted(delta_depot_value)
@@ -75,32 +79,35 @@ def get_depot_value_fluctuation_histogram(net_worth_history: pd.DataFrame) -> go
         fig.add_vline(x=median + k * stddev, line_width=3, line_dash="dash",
                       line_color=colors[k + 1])
         fig.add_annotation(x=median + k * stddev,
-                           text=f"{round(calculate_share_of_values_being_within_stddev(k) * 100, 2)}%",
+                           text=str(round(calculate_share_of_values_being_within_stddev(k) * 100,
+                                          2)) + "%",
                            showarrow=False)
         fig.add_vline(x=median - k * stddev, line_width=3, line_dash="dash",
                       line_color=colors[k + 1])
         fig.add_annotation(x=median - k * stddev,
-                           text=f"{round(calculate_share_of_values_being_within_stddev(k) * 100, 2)}%",
+                           text=str(round(calculate_share_of_values_being_within_stddev(k) * 100,
+                                          2)) + "%",
                            showarrow=False)
     return fig
 
 
 def get_net_worth_bubble_chart(net_worth_history: pd.DataFrame) -> go.Figure:
+    """Get a bubble chart of the net worth history."""
     sizes = net_worth_history["Depotwert"]
     sizes_normalized = (sizes - sizes.min()) / (sizes.max() - sizes.min())
     bubble_chart = go.Scatter(
         x=net_worth_history[DATE_COLUMN],
         y=net_worth_history["Net Worth"],
         mode='markers',
-        marker=dict(
-            size=sizes_normalized,
-            sizemode='diameter',
-            sizeref=sizes_normalized.max() / 30,
-            sizemin=3,
-            color=net_worth_history["Depotwert"],
-            colorscale='Viridis',
-            showscale=True
-        ),
+        marker={
+            "size": sizes_normalized,
+            "sizemode": 'diameter',
+            "sizeref": sizes_normalized.max() / 30,
+            "sizemin": 3,
+            "color": net_worth_history["Depotwert"],
+            "colorscale": 'Viridis',
+            "showscale": True
+        },
     )
     fig = go.Figure(data=[bubble_chart])
     fig.update_layout(
@@ -112,6 +119,7 @@ def get_net_worth_bubble_chart(net_worth_history: pd.DataFrame) -> go.Figure:
 
 
 def get_depot_composition_by_shares_pie(composition_history: pd.DataFrame) -> go.Figure:
+    """Get a pie chart of the current depot composition by shares."""
     labels = composition_history.keys()[1:]
     values = composition_history.iloc[-1][1:]
     return go.Figure(data=[go.Pie(labels=labels, values=values, textinfo="label+percent+value")],
@@ -119,6 +127,7 @@ def get_depot_composition_by_shares_pie(composition_history: pd.DataFrame) -> go
 
 
 def get_depot_composition_by_value_pie(value_history: pd.DataFrame) -> go.Figure:
+    """Get a pie chart of the current depot composition by value."""
     labels = value_history.keys()[1:]
     values = value_history.iloc[-1][1:]
     return go.Figure(data=[go.Pie(labels=labels, values=values, textinfo="label+percent+value")],
@@ -126,26 +135,31 @@ def get_depot_composition_by_value_pie(value_history: pd.DataFrame) -> go.Figure
 
 
 def get_quotes_history_line_plot(quote_history: pd.DataFrame) -> go.Figure:
+    """Get a line plot of the quotes history."""
     labels = quote_history.keys()[1:]
     return px.line(quote_history, x=DATE_COLUMN, y=labels, title="Quotes")
 
 
 def get_depot_composition_history_line_plot(composition_history: pd.DataFrame) -> go.Figure:
+    """Get a line plot of the depot composition history."""
     labels = composition_history.keys()[1:]
     return px.line(composition_history, x=DATE_COLUMN, y=labels, title="Stock Counts")
 
 
 def get_depot_value_history_line_plot(value_history: pd.DataFrame) -> go.Figure:
+    """Get a line plot of the depot value history."""
     labels = value_history.keys()[1:]
     return px.line(value_history, x=DATE_COLUMN, y=labels, title="Stock Values")
 
 
 def get_depot_value_history_area_plot(value_history: pd.DataFrame) -> go.Figure:
+    """Get an area plot of the depot value history."""
     labels = value_history.keys()[1:]
     return px.area(value_history, x=DATE_COLUMN, y=labels, title="Stock Values")
 
 
 def get_avg_performance_gauge(avg_return: float) -> go.Figure:
+    """Get a gauge of the average depot performance."""
     value = avg_return * 100
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -184,6 +198,7 @@ def get_avg_performance_gauge(avg_return: float) -> go.Figure:
 
 
 def get_net_worth_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame) -> go.Figure:
+    """Get a gauge of the current net worth."""
     value = net_worth_history["Net Worth"].iloc[-1]
     reference = mvg_avg["Net Worth"].iloc[-INDICATOR_REFERENCE_DAY_INTERVAL]
     fig = go.Figure(go.Indicator(
@@ -204,6 +219,7 @@ def get_net_worth_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame) 
 
 
 def get_depot_value_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame) -> go.Figure:
+    """Get a gauge of the current depot value."""
     value = net_worth_history["Depotwert"].iloc[-1]
     reference = mvg_avg["Depotwert"].iloc[-INDICATOR_REFERENCE_DAY_INTERVAL]
     fig = go.Figure(go.Indicator(
@@ -224,4 +240,5 @@ def get_depot_value_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame
 
 
 def get_stock_quote_line(quote_history: pd.DataFrame) -> go.Figure:
+    """Get a line plot of the stock quotes."""
     return px.line(quote_history, x=DATE_COLUMN, y=quote_history.keys()[1:], title="Quotes")

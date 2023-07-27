@@ -14,7 +14,10 @@ requirements = [
     "jupyter",
     "pandas",
     "plotly",
-    "nbstripout"
+    "nbstripout",
+    "dash",
+    "darkdetect",
+    "yahoofinancials"
 ]
 
 with open("requirements.txt", "w", encoding="utf-8") as f:
