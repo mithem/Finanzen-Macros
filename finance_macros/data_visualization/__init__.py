@@ -9,6 +9,7 @@ from yahoofinancials import YahooFinancials
 FIXED_SCENARIO_RETURN = .07
 DATE_FORMAT = "%d.%m.%y"
 DATE_COLUMN = "Datum"
+MOVING_AVG_WINDOW_DAYS = 5
 
 
 def get_avg_return_scenario(data: pd.DataFrame, avg_return: float, data_key: str = "Depotwert") -> \
@@ -19,16 +20,24 @@ def get_avg_return_scenario(data: pd.DataFrame, avg_return: float, data_key: str
         (i / 365)) for i in days_list]
 
 
-def get_net_worth_history(export_directory: str) -> Tuple[pd.DataFrame, float]:
-    """Load data from csv file and return it as a pandas dataframe"""
+def get_net_worth_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataFrame, float]:
+    """Load data from csv file and return a tuple of the following format:
+
+    (net_worth_history, net_worth_mvg_avg, avg_return)
+    """
     filename = os.path.join(export_directory, "net_worth_history.csv")
     df = pd.read_csv(filename, sep=";", decimal=".", parse_dates=[DATE_COLUMN],
                      date_format=DATE_FORMAT)
+    df = interpolate_data_nonlinear(df)
     avg_return = (df["Depotwert"].iloc[-1] / df["Depotwert"].iloc[0]) ** (
             365 / (df[DATE_COLUMN].iloc[-1] - df[DATE_COLUMN].iloc[0]).days) - 1
     df["Avg scenario"] = get_avg_return_scenario(df, avg_return)
     df["Fixed scenario"] = get_avg_return_scenario(df, FIXED_SCENARIO_RETURN)
-    return df, avg_return
+    mvg_avg = pd.DataFrame()
+    mvg_avg[DATE_COLUMN] = df[DATE_COLUMN]
+    for col in df.keys()[1:]:
+        mvg_avg[col] = df[col].rolling(MOVING_AVG_WINDOW_DAYS).mean()
+    return df, mvg_avg, avg_return
 
 
 def get_depot_composition_history(export_directory: str) -> pd.DataFrame:
@@ -76,7 +85,7 @@ def interpolate_data_nonlinear(data: pd.DataFrame, start_date: Optional[pd.Times
     for key in keys:
         last_values[key] = data[key].iloc[0]
         new_data[key] = []
-    while date < end_date:
+    while date <= end_date:
         date_idx = data[DATE_COLUMN][data[DATE_COLUMN] == date].index
         if len(date_idx) > 0:
             for key in keys:
