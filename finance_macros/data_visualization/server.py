@@ -12,7 +12,7 @@ parser.add_argument("--export-directory", "-e", required=True,
                     help="The directory where the exports are stored.")
 args = parser.parse_args()
 
-net_worth_history, avg_return = get_net_worth_history(args.export_directory)
+net_worth_history, net_worth_mvg_avg, avg_return = get_net_worth_history(args.export_directory)
 composition_history, quote_history, value_history = get_depot_history(args.export_directory)
 
 DARK_MODE = darkdetect.isDark()
@@ -26,13 +26,16 @@ app.title = "Net Worth Dashboard"
 def mg(fig, style: dict = None):
     if style is None:
         style = {}
-    if DARK_MODE:
-        fig.layout.template = "plotly_dark"
+    fig.layout.template = "plotly_dark" if DARK_MODE else "plotly"
     return Graph(figure=fig, style=style)
 
 
 def fortune_history_line():
     return mg(graphs.get_fortune_history_line_plot(net_worth_history, avg_return))
+
+
+def fortune_history_mvg_avg_line():
+    return mg(graphs.get_fortune_history_line_plot(net_worth_mvg_avg, avg_return))
 
 
 def fortune_history_area():
@@ -75,11 +78,13 @@ def avg_performance_gauge():
 
 
 def net_worth_gauge():
-    return mg(graphs.get_net_worth_gauge(net_worth_history), style={"width": "33%"})
+    return mg(graphs.get_net_worth_gauge(net_worth_history, net_worth_mvg_avg),
+              style={"width": "33%"})
 
 
 def depot_value_gauge():
-    return mg(graphs.get_depot_value_gauge(net_worth_history), style={"width": "33%"})
+    return mg(graphs.get_depot_value_gauge(net_worth_history, net_worth_mvg_avg),
+              style={"width": "33%"})
 
 
 def stock_quotes_line():
@@ -122,6 +127,11 @@ app.layout = html.Div([
                 stock_quotes_line()
             ])
         ]),
+        dcc.Tab(label="Fortune mvg avg", children=[
+            html.Div([
+                fortune_history_mvg_avg_line()
+            ])
+        ])
     ])
 ], style={"font-family": "'Open Sans', verdana, arial, sans-serif",
           "background-color": BACKGROUND_COLOR, "color": FONT_COLOR})

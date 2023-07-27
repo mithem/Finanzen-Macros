@@ -4,6 +4,8 @@ import plotly.graph_objs as go
 
 from finance_macros.data_visualization import FIXED_SCENARIO_RETURN, DATE_COLUMN
 
+INDICATOR_REFERENCE_DAY_INTERVAL = 7
+
 
 def get_fortune_history_line_plot(net_worth_history: pd.DataFrame, avg_return: float) -> go.Figure:
     """Get a line plot of the fortune history."""
@@ -181,9 +183,9 @@ def get_avg_performance_gauge(avg_return: float) -> go.Figure:
     return fig
 
 
-def get_net_worth_gauge(net_worth_history: pd.DataFrame):
+def get_net_worth_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame) -> go.Figure:
     value = net_worth_history["Net Worth"].iloc[-1]
-    reference = net_worth_history["Net Worth"].iloc[-7]
+    reference = mvg_avg["Net Worth"].iloc[-INDICATOR_REFERENCE_DAY_INTERVAL]
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=value,
@@ -201,9 +203,9 @@ def get_net_worth_gauge(net_worth_history: pd.DataFrame):
     return fig
 
 
-def get_depot_value_gauge(net_worth_history: pd.DataFrame):
+def get_depot_value_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame) -> go.Figure:
     value = net_worth_history["Depotwert"].iloc[-1]
-    reference = net_worth_history["Depotwert"].iloc[-7]
+    reference = mvg_avg["Depotwert"].iloc[-INDICATOR_REFERENCE_DAY_INTERVAL]
     fig = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=value,
