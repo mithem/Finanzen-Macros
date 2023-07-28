@@ -1,4 +1,6 @@
+"""Dash server for the net worth dashboard."""
 import argparse
+from typing import Optional
 
 import darkdetect
 from dash import Dash, html, dcc
@@ -12,7 +14,7 @@ parser.add_argument("--export-directory", "-e", required=True,
                     help="The directory where the exports are stored.")
 args = parser.parse_args()
 
-net_worth_history, avg_return = get_net_worth_history(args.export_directory)
+net_worth_history, net_worth_mvg_avg, avg_return = get_net_worth_history(args.export_directory)
 composition_history, quote_history, value_history = get_depot_history(args.export_directory)
 
 DARK_MODE = darkdetect.isDark()
@@ -23,66 +25,86 @@ app = Dash(__name__)
 app.title = "Net Worth Dashboard"
 
 
-def mg(fig, style: dict = None):
+def mg(fig, style: Optional[dict] = None):  # pylint: disable=invalid-name
+    """Wrap a plotly figure in a dash Graph."""
     if style is None:
         style = {}
-    if DARK_MODE:
-        fig.layout.template = "plotly_dark"
+    fig.layout.template = "plotly_dark" if DARK_MODE else "plotly"
     return Graph(figure=fig, style=style)
 
 
 def fortune_history_line():
+    """Get a line plot of the fortune history."""
     return mg(graphs.get_fortune_history_line_plot(net_worth_history, avg_return))
 
 
+def fortune_history_mvg_avg_line():
+    """Get a line plot of the fortune history."""
+    return mg(graphs.get_fortune_history_line_plot(net_worth_mvg_avg, avg_return))
+
+
 def fortune_history_area():
+    """Get an area plot of the fortune history."""
     return mg(graphs.get_fortune_history_area_plot(net_worth_history))
 
 
 def net_worth_composition_pie():
+    """Get a pie chart of the current net worth composition."""
     return mg(graphs.get_current_net_worth_composition_pie(net_worth_history),
               style={"width": "33%"})
 
 
 def depot_value_fluctuation_histogram():
+    """Get a histogram of the depot value fluctuations."""
     return mg(graphs.get_depot_value_fluctuation_histogram(net_worth_history))
 
 
 def depot_composition_by_value():
+    """Get a pie chart of the current depot composition by value."""
     return mg(graphs.get_depot_composition_by_value_pie(value_history),
               style={"width": "33%"})
 
 
 def depot_composition_by_shares():
+    """Get a pie chart of the current depot composition by shares."""
     return mg(graphs.get_depot_composition_by_shares_pie(composition_history),
               style={"width": "33%"})
 
 
 def net_worth_bubble():
+    """Get a bubble chart of the net worth history."""
     return mg(graphs.get_net_worth_bubble_chart(net_worth_history))
 
 
 def depot_value_history_area():
+    """Get an area plot of the depot value history."""
     return mg(graphs.get_depot_value_history_area_plot(value_history))
 
 
 def depot_value_history_line():
+    """Get a line plot of the depot value history."""
     return mg(graphs.get_depot_value_history_line_plot(value_history))
 
 
 def avg_performance_gauge():
+    """Get a gauge of the average performance."""
     return mg(graphs.get_avg_performance_gauge(avg_return), style={"width": "33%"})
 
 
 def net_worth_gauge():
-    return mg(graphs.get_net_worth_gauge(net_worth_history), style={"width": "33%"})
+    """Get a gauge of the current net worth."""
+    return mg(graphs.get_net_worth_gauge(net_worth_history, net_worth_mvg_avg),
+              style={"width": "33%"})
 
 
 def depot_value_gauge():
-    return mg(graphs.get_depot_value_gauge(net_worth_history), style={"width": "33%"})
+    """Get a gauge of the current depot value."""
+    return mg(graphs.get_depot_value_gauge(net_worth_history, net_worth_mvg_avg),
+              style={"width": "33%"})
 
 
 def stock_quotes_line():
+    """Get a line plot of the stock quotes."""
     return mg(graphs.get_stock_quote_line(quote_history))
 
 
@@ -122,6 +144,11 @@ app.layout = html.Div([
                 stock_quotes_line()
             ])
         ]),
+        dcc.Tab(label="Fortune mvg avg", children=[
+            html.Div([
+                fortune_history_mvg_avg_line()
+            ])
+        ])
     ])
 ], style={"font-family": "'Open Sans', verdana, arial, sans-serif",
           "background-color": BACKGROUND_COLOR, "color": FONT_COLOR})

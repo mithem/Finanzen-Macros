@@ -45,21 +45,22 @@ def snapshot_net_worth(*args):  # pylint: disable=invalid-name,unused-argument
     sheet.getCellByPosition(DEPOT_VALUE_COLUMN, row).setValue(current_depot_value)
 
 
-def write_csv(*args):
+def write_csv(*args):  # pylint: disable=unused-argument
     """Write the net worth history table to a csv file."""
-    with open(os.path.join(EXPORT_DIRECTORY, "net_worth_history.csv"), "w") as f:
+    with open(os.path.join(EXPORT_DIRECTORY, "net_worth_history.csv"), "w",
+              encoding="utf-8") as file:
         row = FIRST_DATA_ROW
         columns = {"Net Worth": NET_WORTH_COLUMN, "Depotwert": DEPOT_VALUE_COLUMN,
                    "Davon nicht Depot": NOT_IN_DEPOT_COLUMN}
         date = _get_date_value(row)
-        f.write("Datum")
+        file.write("Datum")
         for col in columns:
-            f.write(";" + col)
-        f.write("\n")
+            file.write(";" + col)
+        file.write("\n")
         while date:
-            f.write(date)
-            for column, col_num in columns.items():
-                f.write(";" + str(sheet.getCellByPosition(col_num, row).getValue()))
-            f.write("\n")
+            file.write(date)
+            for col_nr in columns.values():
+                file.write(";" + str(sheet.getCellByPosition(col_nr, row).getValue()))
+            file.write("\n")
             row += 1
             date = _get_date_value(row)
