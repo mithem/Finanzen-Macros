@@ -9,7 +9,8 @@ from finance_macros.acquisitions import (
     BasePlanningEgalitarianDistribution,
     BasePlanningTargetDate,
     BasePlanning,
-    _get_next_planning_date
+    _get_next_planning_date,
+    _planning_date_count_between
 )
 
 
@@ -892,10 +893,10 @@ def test_planning_does_not_allocate_to_acquisitions_with_weight_0():
 
 
 def test_target_date_planning():
-    a1 = ac("a", 1200, 1, 0, date(2024, 1, 1))
-    a2 = ac("b", 1200, 1, 0, date(2025, 1, 1))
+    a1 = ac("a", 1200, 1, 0, date(2023, 12, 31))
+    a2 = ac("b", 1200, 1, 0, date(2024, 12, 31))
 
-    planning = BasePlanningTargetDate([a1, a2], 200, 0, date(2023, 12, 1))
+    planning = BasePlanningTargetDate([a1, a2], 200, 0, date(2023, 12, 31))
     planning.calculate_acquired_budgets()
 
     assert a1.budget_acquired == 1200
@@ -972,7 +973,7 @@ def test_target_date_planning_3():
         start_budget=0,
         target_budget=600,
         start_date=date(2023, 1, 1),
-        target_date=date(2024, 1, 1),
+        target_date=date(2023, 12, 31),
         weight=1
     )
     a2 = BaseAcquisition(
@@ -980,7 +981,7 @@ def test_target_date_planning_3():
         start_budget=0,
         target_budget=600,
         start_date=date(2023, 1, 1),
-        target_date=date(2024, 1, 1),
+        target_date=date(2023, 12, 31),
         weight=2
     )
     a3 = BaseAcquisition(
@@ -1031,7 +1032,7 @@ def test_target_date_planning_3():
     assert_round(a4.budget_acquired, 600)
 
     reset_acquisitions()
-    planning.today = date(2024, 1, 1)
+    planning.today = date(2023, 12, 31)
     planning.calculate_acquired_budgets()
 
     assert_round(a1.budget_acquired, 600)
@@ -1046,7 +1047,7 @@ def test_target_date_planning_4():
         start_budget=0,
         target_budget=600,
         start_date=date(2023, 1, 1),
-        target_date=date(2024, 1, 1),
+        target_date=date(2023, 12, 31),
         weight=1
     )
     a2 = BaseAcquisition(
@@ -1054,7 +1055,7 @@ def test_target_date_planning_4():
         start_budget=0,
         target_budget=600,
         start_date=date(2023, 7, 1),
-        target_date=date(2024, 1, 1),
+        target_date=date(2023, 12, 31),
         weight=2
     )
     a3 = BaseAcquisition(
@@ -1096,7 +1097,7 @@ def test_target_date_planning_5():
         start_budget=0,
         target_budget=600,
         start_date=date(2023, 1, 1),
-        target_date=date(2024, 1, 1),
+        target_date=date(2023, 12, 31),
         weight=1
     )
     a2 = BaseAcquisition(
@@ -1221,8 +1222,8 @@ def test_target_date_planning_6():
     planning = BasePlanningTargetDate(acquisitions, 203.1, 455.66, date(2023, 6, 25), 26)
     planning.calculate_acquired_budgets()
 
-    assert_round(a1.budget_acquired, 115.38)
-    assert_round(a2.budget_acquired, 40)
+    assert_round(a1.budget_acquired, 62.5)
+    assert_round(a2.budget_acquired, 24)
     assert_round(a3.budget_acquired, 130)
     assert_round(a4.budget_acquired, 0)
     assert_round(a5.budget_acquired, 55)
@@ -1236,6 +1237,17 @@ def test_target_date_planning_6():
     assert_round(a13.budget_acquired, 10)
     assert_round(a14.budget_acquired, 15)
     assert_round(a15.budget_acquired, 0)
+
+
+def test_target_date_planning_7():
+    a1 = BaseAcquisition("A", 0, 750, date(2023, 5, 15), date(2024, 5, 1), 1)
+    a2 = BaseAcquisition("B", 0, 120, date(2023, 5, 15), date(2023, 10, 1), 2)
+    a3 = BaseAcquisition("C", 0, 350, None, None, 10)
+    a4 = BaseAcquisition("D", 0, 350, date(2023, 5, 26), date(2024, 1, 1), 10)
+
+    acquisitions = [a1, a2, a3, a4]
+    planning = BasePlanningTargetDate(acquisitions, 200, 500, date(2023, 7, 29), 25)
+    planning.calculate_acquired_budgets()
 
 
 def test_get_earliest_planning_date():
@@ -1306,3 +1318,13 @@ def test_get_next_planning_30th_of_month():
     assert _get_next_planning_date(date(2023, 2, 1), 30) == date(2023, 2, 28)
     assert _get_next_planning_date(date(2023, 2, 15), 30) == date(2023, 2, 28)
     assert _get_next_planning_date(date(2023, 2, 28), 30) == date(2023, 3, 30)
+
+
+def test_planning_date_count():
+    assert _planning_date_count_between(date(2023, 1, 1), date(2023, 12, 31), 1) == 12
+    assert _planning_date_count_between(date(2023, 1, 1), date(2023, 12, 31), -1) == 12
+    assert _planning_date_count_between(date(2023, 1, 1), date(2024, 1, 1), 1) == 13
+    assert _planning_date_count_between(date(2023, 3, 15), date(2023, 3, 15), 1) == 0
+    assert _planning_date_count_between(date(2023, 2, 1), date(2023, 2, 1), 1) == 1
+    assert _planning_date_count_between(date(2023, 1, 15), date(2023, 3, 15), 10) == 2
+    assert _planning_date_count_between(date(2023, 1, 31), date(2023, 3, 29), -2) == 1
