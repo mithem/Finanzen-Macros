@@ -56,9 +56,10 @@ def _get_next_planning_date(current_date: date, planning_day_of_month: int) -> d
 
 def _planning_date_count_between(date1: date, date2: date, planning_day_of_month: int) -> int:
     """Return the number of planning dates between the two given dates."""
-    counter = 0
-    planning_date = date1
-    while planning_date < date2:
+    counter = 1 if date1.day == _get_day_of_month_of_planning_date(date1,
+                                                                   planning_day_of_month) else 0
+    planning_date = _get_next_planning_date(date1, planning_day_of_month)
+    while planning_date <= date2:
         counter += 1
         planning_date = _get_next_planning_date(planning_date, planning_day_of_month)
     return counter
@@ -198,16 +199,22 @@ class BasePlanning:
             return None
         return earliest_planning_day
 
-    def call_at_each_planning_date(self, callback: Callable[[date], None]):
-        """Call the given callback at each planning date until today."""
+    def call_at_each_planning_date(self, callback: Callable[[
+        date], Optional[float]]) -> float:
+        """Call the given callback at each planning date until today.
+        Return the sum of extra budget accumulated over the planning dates."""
         planning_date = self.get_earliest_planning_date()
         if not planning_date:  # either no planning date at all or just today
-            return
+            return 0
         self._planning_dates = []
+        value_sum: float = 0
         while planning_date <= self.today:
             self._planning_dates.append(planning_date)
-            callback(planning_date)
+            value = callback(planning_date)
+            if value is not None:
+                value_sum += value
             planning_date = _get_next_planning_date(planning_date, self.planning_day_of_month)
+        return value_sum
 
 
 class BasePlanningWeightedMonthlyContribution(BasePlanning):
@@ -413,8 +420,9 @@ class BasePlanningTargetDate(BasePlanning):
         acqs = list(filter(lambda a: a.target_date is None or a.start_date is None, acquisitions))
         return sum(map(lambda a: a.request_budget(planning_date), acqs)), acqs
 
-    def allocate_budget(self, budget: float, planning_date: date):
-        """Allocate a one-time budget (e.g. of a month or a starting budget)."""
+    def allocate_budget(self, budget: float, planning_date: date) -> float:
+        """Allocate a one-time budget (e.g. of a month or a starting budget).
+        The remaining (extra, more than could be allocated) budget is returned."""
         remaining_budget = budget
         acquisitions = sorted(self.acquisitions, key=lambda a: a.weight, reverse=True)
         immediate_allocation_budget, immediate_acquisitions = self. \
@@ -443,26 +451,28 @@ class BasePlanningTargetDate(BasePlanning):
             to_allocate = max(
                 0.0,
                 min(
-                    (acq.target_budget - acq.start_budget) / num_planning_dates
-                    + allocation_deficit,
+                    allocation_deficit,
                     requested,
                     remaining_budget
                 )
             )
-            acq.allocate_budget(to_allocate)
-            remaining_budget -= to_allocate
-
-        if 0 < remaining_budget < budget:  # avoid recursion
-            self.allocate_budget(remaining_budget, planning_date)
+            if to_allocate > 0:
+                acq.allocate_budget(to_allocate)
+                remaining_budget -= to_allocate
+        return remaining_budget
 
     def calculate_acquired_budgets(self):
         earliest_planning_date = self.get_earliest_planning_date()
-        self.allocate_budget(
+        extra_budget = self.allocate_budget(
             self.start_budget, earliest_planning_date if earliest_planning_date else self.today
         )
-        self.call_at_each_planning_date(
+        value = self.call_at_each_planning_date(
             lambda planning_date: self.allocate_budget(self.monthly_budget, planning_date)
         )
+        if value is not None:
+            extra_budget += value
+        if extra_budget:
+            self.allocate_budget(extra_budget, self.today)
 
 
 class SpreadsheetAcquisition(BaseAcquisition):
