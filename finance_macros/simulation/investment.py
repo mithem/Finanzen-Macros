@@ -1,7 +1,5 @@
 from datetime import date
-from typing import List
-
-import pandas as pd
+from typing import List, Dict
 
 from finance_macros.simulation.core import TimeSeriesSimulation
 
@@ -36,8 +34,8 @@ class InvestmentSimulation(TimeSeriesSimulation):
     def invest_one_month(self):
         self._capital[-1] += self.monthly_investment
 
-    def get_results(self) -> pd.DataFrame:
-        return pd.DataFrame({"capital": self._capital, "profit": self._profit, "date": self._dates})
+    def get_results(self) -> Dict:
+        return {"capital": self._capital, "profit": self._profit, "date": self._dates}
 
     def simulate(self):
         self.call_simulation_functions(
