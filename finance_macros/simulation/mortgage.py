@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List, Optional
 
-from finance_macros.simulation.core import TimeSeriesSimulation
+from finance_macros.simulation.core import TimeSeriesSimulation, SimulationContext
 
 
 class MortgageSimulation(TimeSeriesSimulation):
@@ -18,10 +18,11 @@ class MortgageSimulation(TimeSeriesSimulation):
     _interest_rate: List[float]
     pay_off_date: Optional[date]
 
-    def __init__(self, start_date: date, end_date: date, mortgage_sum: float,
-                 downpayment_ratio: float, interest_rate: float, monthly_payment: float,
-                 export_directory: str):
-        super().__init__(export_directory, start_date, end_date)
+    def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
+                 start_date: date, end_date: date,
+                 mortgage_sum: float,
+                 downpayment_ratio: float, interest_rate: float, monthly_payment: float):
+        super().__init__(export_directory, identifier, context, start_date, end_date)
         self.borrowed_amount = mortgage_sum * (1 - downpayment_ratio)
         self.downpayment = mortgage_sum * downpayment_ratio
         self.yearly_interest = interest_rate
