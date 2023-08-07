@@ -1,3 +1,5 @@
+"""Main entrypoint for the simulation module. This module is responsible for running the simulation
+and the dashboard."""
 import argparse
 
 from finance_macros.simulation import server
@@ -7,11 +9,16 @@ from finance_macros.simulation.core import SimulationContext, Simulation, Colors
 CSV_FILE_COUNT_PER_SIM_TYPE = {}
 CONFIG = Config()
 
-for type in CONFIG.get_simulation_types():
-    CSV_FILE_COUNT_PER_SIM_TYPE[type.key] = 1
+for type_ in CONFIG.get_simulation_types():
+    CSV_FILE_COUNT_PER_SIM_TYPE[type_.key] = 1
 
 
 def run_simulation(context: SimulationContext, simulation_type: str, export_directory: str):
+    """Run a simulation with arguments prompted from the user.
+    :param context: The simulation context
+    :param simulation_type: The type of simulation to run
+    :param export_directory: The directory to export the simulation to
+    """
     config = CONFIG.get_simulation_type(simulation_type)
     args = {}
     count = CSV_FILE_COUNT_PER_SIM_TYPE[simulation_type]
@@ -26,11 +33,13 @@ def run_simulation(context: SimulationContext, simulation_type: str, export_dire
     sim.simulate()
     sim.write_csv()
     print(
-        f"Saved simulation under {sim.identifier} ({sim.get_short_identifier()}) {Colors.OKGREEN}\u2713{Colors.ENDC}")
+        f"Saved simulation under {sim.identifier} ({sim.get_short_identifier()}) \
+{Colors.OKGREEN}\u2713{Colors.ENDC}")
     CSV_FILE_COUNT_PER_SIM_TYPE[simulation_type] += 1
 
 
 def main():
+    """Main entrypoint."""
     parser = argparse.ArgumentParser(description="Run a financial simulation")
     parser.add_argument("--add-simulation", "-a", "--simulation", "-s", type=str,
                         help="Add a simulation type", nargs="+", action="append")

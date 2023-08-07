@@ -1,10 +1,15 @@
+"""Mortgage simulation."""
 from datetime import date
 from typing import List, Optional
 
 from finance_macros.simulation.core import TimeSeriesSimulation, SimulationContext
 
 
+# pylint: disable=too-many-instance-attributes
 class MortgageSimulation(TimeSeriesSimulation):
+    """A simulation of a mortgage with a fixed borrowed amount, down payment, interest rate and
+    monthly payment. The monthly payment is constant, but the principal and interest paid
+    changes according to the remaining due amount (and interest of course)."""
     borrowed_amount: float
     downpayment: float
     yearly_interest: float
@@ -18,6 +23,7 @@ class MortgageSimulation(TimeSeriesSimulation):
     _interest_rate: List[float]
     pay_off_date: Optional[date]
 
+    # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
                  start_date: date, end_date: date,
                  mortgage_sum: float,
@@ -36,9 +42,11 @@ class MortgageSimulation(TimeSeriesSimulation):
         self._interest_rate = [0]
 
     def calculate_monthly_interest(self) -> float:
+        """Calculate the monthly interest rate from the yearly interest rate."""
         return (1 + self.yearly_interest) ** (1 / 12) - 1
 
     def pay_for_month(self):
+        """Simulate a monthly payment."""
         new_interest_paid = self._due_amount[-1] * self.monthly_interest
         principal_paid = self.monthly_payment - new_interest_paid
         self._interest_paid.append(self._interest_paid[-1] + new_interest_paid)
