@@ -31,7 +31,7 @@ def get_net_worth_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataF
     filename = os.path.join(export_directory, "net_worth_history.csv")
     data = pd.read_csv(filename, sep=";", decimal=".", parse_dates=[DATE_COLUMN],
                        date_format=DATE_FORMAT)
-    data = interpolate_data_nonlinear(data)
+    data = interpolate_data_nonlinear(data, DATE_COLUMN)
     avg_return = (data["Depotwert"].iloc[-1] / data["Depotwert"].iloc[0]) ** (
             365 / (data[DATE_COLUMN].iloc[-1] - data[DATE_COLUMN].iloc[0]).days) - 1
     data["Avg scenario"] = get_avg_return_scenario(data, avg_return)
@@ -77,7 +77,8 @@ def get_stock_quotes(depot_composition_history: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def interpolate_data_nonlinear(data: pd.DataFrame, start_date: Optional[pd.Timestamp] = None,
+def interpolate_data_nonlinear(data: pd.DataFrame, index_column: str,
+                               start_date: Optional[pd.Timestamp] = None,
                                end_date: Optional[pd.Timestamp] = None) -> pd.DataFrame:
     """Interpolate data using a nonlinear interpolation method.
 
@@ -86,16 +87,16 @@ def interpolate_data_nonlinear(data: pd.DataFrame, start_date: Optional[pd.Times
     of the time interval in the source data). The values used for interpolation are the last known
     values for each column.
     """
-    keys = data.keys()[1:]
+    keys = list(filter(lambda k: k != index_column, data.keys()))
     last_values = {}
-    new_data: Dict[str, List[Union[pd.Timestamp, float]]] = {DATE_COLUMN: []}
-    date = start_date if start_date else data[DATE_COLUMN].iloc[0]
-    end_date = end_date if end_date else data[DATE_COLUMN].iloc[-1]
+    new_data: Dict[str, List[Union[pd.Timestamp, float]]] = {index_column: []}
+    date = start_date if start_date else data[index_column].iloc[0]
+    end_date = end_date if end_date else data[index_column].iloc[-1]
     for key in keys:
         last_values[key] = data[key].iloc[0]
         new_data[key] = []
     while date <= end_date:
-        date_idx = data[DATE_COLUMN][data[DATE_COLUMN] == date].index
+        date_idx = data[index_column][data[index_column] == date].index
         if len(date_idx) > 0:
             for key in keys:
                 value = data[key].iloc[date_idx[0]]
@@ -104,7 +105,7 @@ def interpolate_data_nonlinear(data: pd.DataFrame, start_date: Optional[pd.Times
         else:
             for key in keys:
                 new_data[key].append(last_values[key])
-        new_data[DATE_COLUMN].append(date)
+        new_data[index_column].append(date)
         date += datetime.timedelta(days=1)
     return pd.DataFrame(new_data)
 
@@ -118,8 +119,8 @@ def get_depot_history(export_directory: str) -> Tuple[pd.DataFrame, pd.DataFrame
     quotes = get_stock_quotes(composition)
     end_date = quotes[DATE_COLUMN].iloc[-1]
 
-    composition_history = interpolate_data_nonlinear(composition, start_date, end_date)
-    quotes_history = interpolate_data_nonlinear(quotes, start_date, end_date)
+    composition_history = interpolate_data_nonlinear(composition, DATE_COLUMN, start_date, end_date)
+    quotes_history = interpolate_data_nonlinear(quotes, DATE_COLUMN, start_date, end_date)
 
     values_history = pd.DataFrame()
     values_history[DATE_COLUMN] = composition_history[DATE_COLUMN]
