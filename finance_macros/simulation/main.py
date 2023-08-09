@@ -20,11 +20,9 @@ def run_simulation(context: SimulationContext, simulation_type: str, export_dire
     :param export_directory: The directory to export the simulation to
     """
     config = CONFIG.get_simulation_type(simulation_type)
-    args = {}
     count = CSV_FILE_COUNT_PER_SIM_TYPE[simulation_type]
     print(f"\n{config.display_name} simulation {count}:")
-    for arg in config.arguments:
-        args[arg.key] = arg.load_value(context)
+    args = config.prompt(context)
     identifier = f"{simulation_type}_{count}"
     sim: Simulation = config.type(identifier=identifier, export_directory=export_directory,
                                   context=context,

@@ -57,3 +57,6 @@ class InvestmentSimulation(TimeSeriesSimulation):
             lambda _: self.invest_one_month(),
             1
         )
+
+    def get_column_names(self) -> List[str]:
+        return ["capital", "profit", "paid_in", "date"]

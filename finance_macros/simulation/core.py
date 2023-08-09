@@ -6,8 +6,6 @@ from typing import Callable, List, Dict, Optional, TypeVar
 
 import pandas as pd
 
-from finance_macros.data_visualization import interpolate_data_nonlinear
-
 
 class Simulation:
     """Base class for financial simulations"""
@@ -21,6 +19,11 @@ class Simulation:
 
     def simulate(self):
         """Run the simulation, saving its state only in the simulation object itself."""
+        raise NotImplementedError
+
+    def get_column_names(self) -> List[str]:
+        """:returns: list of column names of the results of the simulation, which is identical to \
+        the results' keys."""
         raise NotImplementedError
 
     def get_results(self) -> Dict:
@@ -73,14 +76,18 @@ class SimulationContext:
         :param simulation: the simulation to add to the context."""
         self.simulations.append(simulation)
 
-    def get_simulations_with_id(self, identifier: str) -> List[Simulation]:
-        """Get all simulations with a given identifier.
-        :param identifier: the identifier to search for.
+    def get_simulations_with_ids(self, *identifiers: str) -> List[Simulation]:
+        """Get all simulations with one of the given identifiers.
+        :param identifiers: the identifiers to search for.
         :returns: all simulations with the given identifier."""
-        short_id = Simulation.make_short_identifier(identifier)
+        short_ids = [Simulation.make_short_identifier(identifier) for identifier in identifiers]
         return list(
-            filter(lambda s: s.identifier == identifier or s.get_short_identifier() == short_id,
+            filter(lambda s: s.identifier in identifiers or s.get_short_identifier() in short_ids,
                    self.simulations))
+
+    def get_short_identifiers(self) -> List[str]:
+        """:returns: the short identifiers of all simulations in the context."""
+        return list(map(lambda s: s.get_short_identifier(), self.simulations))
 
 
 # pylint: disable=abstract-method
@@ -117,42 +124,6 @@ class TimeSeriesSimulation(Simulation):
                 monthly_callback(date)
             if daily_callback or (monthly_callback and date.day == day_of_month):
                 self._dates.append(date)
-
-
-class Overlay(Simulation):
-    """A special simulation that combines the results of multiple simulations."""
-    simulations: List[Simulation]
-
-    def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 simulations: List[str]):
-        super().__init__(export_directory, identifier, context)
-        simlistlist = [context.get_simulations_with_id(identifier) for identifier in
-                       simulations]
-        self.simulations = [simulation for sublist in simlistlist for simulation in sublist]
-
-    def simulate(self):
-        for simulation in self.simulations:
-            simulation.simulate()
-
-    def get_results(self) -> Dict:
-        tmp = {}
-        for simulation in self.simulations:
-            tmp[simulation.get_short_identifier()] = simulation.get_results()
-        results = {}
-        start_date = min(
-            map(lambda sim: sim["date"][0], tmp.values()))
-        end_date = max(
-            map(lambda sim: sim["date"][-1], tmp.values()))
-        for i, (sim, result) in enumerate(tmp.items()):
-            interpolated = interpolate_data_nonlinear(pd.DataFrame(result), "date", start_date,
-                                                      end_date)
-            for key, values in interpolated.items():
-                if key != "date":
-                    results[sim + "_" + key] = list(values)
-
-            if i == 0:
-                results["date"] = list(interpolated["date"])
-        return results
 
 
 class UserError(Exception):
