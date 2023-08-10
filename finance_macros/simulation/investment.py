@@ -1,6 +1,6 @@
 """Investment simulation."""
 from datetime import date
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from finance_macros.simulation.core import TimeSeriesSimulation, SimulationContext
 
@@ -9,6 +9,7 @@ class InvestmentSimulation(TimeSeriesSimulation):
     """A simulation of an investment account, with a fixed monthly investment and a fixed yearly
     return."""
     starting_capital: float
+    target_capital: Optional[float]
     monthly_investment: float
     yearly_return: float
     daily_return: float
@@ -18,11 +19,15 @@ class InvestmentSimulation(TimeSeriesSimulation):
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 start_date: date, end_date: date,
+                 start_date: date, end_date: Optional[date],
                  starting_capital: float,
-                 monthly_investment: float, yearly_return: float):
-        super().__init__(export_directory, identifier, context, start_date, end_date)
+                 monthly_investment: float, yearly_return: float,
+                 target_capital: Optional[float] = None):
+        assert end_date or target_capital, "Either end_date or target_capital must be specified."
+        super().__init__(export_directory, identifier, context, start_date, end_date, (
+            lambda _: self._capital[-1] >= self.target_capital) if target_capital else None)
         self.starting_capital = starting_capital
+        self.target_capital = target_capital
         self.monthly_investment = monthly_investment
         self.yearly_return = yearly_return
         self.daily_return = self.calculate_daily_return()

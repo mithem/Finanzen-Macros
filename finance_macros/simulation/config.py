@@ -186,6 +186,7 @@ class Config:
     building_society_savings_contract: SimulationTypeConfig
     overlay: SimulationTypeConfig
     combination: SimulationTypeConfig
+    real_estate: SimulationTypeConfig
 
     def __init__(self):
         # import here as otherwise, there would be a circular import
@@ -196,6 +197,7 @@ class Config:
         from finance_macros.simulation.overlay import Overlay
         from finance_macros.simulation.building_society_savings_contract import \
             BuildingSocietySavingsContract
+        from finance_macros.simulation.real_estate import RealEstateSimulation
         self.investment = SimulationTypeConfig(
             "investment",
             "Investment",
@@ -258,6 +260,22 @@ class Config:
                             additional_arg_provider=CombinationFunctionList.additional_arg_provider)
             ]
         )
+        self.real_estate = SimulationTypeConfig(
+            "real_estate",
+            "Real Estate",
+            RealEstateSimulation,
+            [
+                CLIArgument("start_date", date, True, date.today(), "Start date"),
+                CLIArgument("buy_price", Float, display_name="Buy price"),
+                CLIArgument("cash_available", Float, display_name="Cash available"),
+                CLIArgument("inflation", Float, display_name="Inflation"),
+                CLIArgument("pay_rate", Float, display_name="Pay rate"),
+                CLIArgument("rent", Float, display_name="Rent"),
+                CLIArgument("investment_return", Float, display_name="Investment return"),
+                CLIArgument("mortgage_interest", Float, display_name="Mortgage interest"),
+                CLIArgument("target_downpayment", Float, display_name="Target downpayment")
+            ]
+        )
 
     def get_simulation_types(self) -> List[SimulationTypeConfig]:
         """Returns a list of all simulation types."""
@@ -266,7 +284,8 @@ class Config:
             self.mortgage,
             self.building_society_savings_contract,
             self.overlay,
-            self.combination
+            self.combination,
+            self.real_estate
         ]
 
     def get_simulation_type(self, key: str) -> SimulationTypeConfig:

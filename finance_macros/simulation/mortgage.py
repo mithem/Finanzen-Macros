@@ -27,10 +27,12 @@ class MortgageSimulation(TimeSeriesSimulation):
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 start_date: date, end_date: date,
+                 start_date: date, end_date: Optional[date],
                  mortgage_sum: float,
                  downpayment_ratio: float, interest_rate: float, monthly_payment: float):
-        super().__init__(export_directory, identifier, context, start_date, end_date)
+        super().__init__(export_directory, identifier, context, start_date, end_date, (
+            lambda _: self._due_amount[-1] <= 0
+        ) if not end_date else None)
         self.mortgage_sum = mortgage_sum
         self.borrowed_amount = mortgage_sum * (1 - downpayment_ratio)
         self.downpayment = mortgage_sum * downpayment_ratio

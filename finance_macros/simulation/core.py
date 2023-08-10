@@ -49,12 +49,18 @@ class Simulation:
         """:param identifier: the identifier of a simulation
         :returns: the short identifier for the simulation, based on the identifier given to the
         simulation."""
-        match = re.match(r"(.+)_(\d+)", identifier)
+        match = re.match(r"(.+)_(\d+)(-(.+))?", identifier)
         if not match:
             return identifier
-        name, count = match.groups()
+        groups = match.groups()
+        name = groups[0]
+        count = groups[1]
+        try:
+            extra_info = groups[3]
+        except IndexError:
+            extra_info = None
         name_shorthand = "".join(map(lambda s: s[0], name.split("_")))
-        return name_shorthand + count
+        return name_shorthand + count + ("-" + extra_info) if extra_info else ""
 
     def get_short_identifier(self):
         """:returns: the short identifier for this simulation."""
@@ -94,17 +100,25 @@ class SimulationContext:
 class TimeSeriesSimulation(Simulation):
     """Base class for simulations that are run over a period of time."""
     start_date: datetime.date
-    end_date: datetime.date
+    end_date: Optional[datetime.date]
     _dates: List[datetime.date]
+
+    end_condition_achieved_callback: Optional[Callable[[datetime.date], bool]]
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
                  starting_date: datetime.date,
-                 end_date: datetime.date):
+                 end_date: Optional[datetime.date] = None,
+                 end_condition_achieved_callback: Optional[
+                     Callable[[datetime.date], bool]] = None):
         super().__init__(export_directory, identifier, context)
+        assert end_date or end_condition_achieved_callback, "Either an end date or an end \
+        condition achieved callback must be given to calculate an appropriate end date."
         self.start_date = starting_date
         self.end_date = end_date
         self._dates = [self.start_date]
+
+        self.end_condition_achieved_callback = end_condition_achieved_callback
 
     def call_simulation_functions(self,
                                   daily_callback: Optional[Callable[[datetime.date], None]] = None,
@@ -116,7 +130,7 @@ class TimeSeriesSimulation(Simulation):
         :param monthly_callback: the function to call on each month.
         :param day_of_month: the day of the month on which to call the monthly callback."""
         date = self.start_date
-        while date < self.end_date:
+        while self.end_date is None or date < self.end_date:
             date += datetime.timedelta(days=1)
             if daily_callback:
                 daily_callback(date)
@@ -124,6 +138,9 @@ class TimeSeriesSimulation(Simulation):
                 monthly_callback(date)
             if daily_callback or (monthly_callback and date.day == day_of_month):
                 self._dates.append(date)
+            if self.end_condition_achieved_callback:
+                if self.end_condition_achieved_callback(date):
+                    self.end_date = date
 
 
 class UserError(Exception):
