@@ -1,5 +1,5 @@
 """Overlay simulation"""
-from typing import List, Dict
+from typing import List, Dict, Union
 
 import pandas as pd
 
@@ -12,9 +12,14 @@ class Overlay(Simulation):
     simulations: List[Simulation]
 
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 simulations: List[str]):
+                 simulations: Union[List[str], List[Simulation]]):
         super().__init__(export_directory, identifier, context)
-        self.simulations = context.get_simulations_with_ids(*simulations)
+        sims: List[Simulation] = []
+        if isinstance(simulations[0], str):
+            sims = context.get_simulations_with_ids(*simulations)
+        elif isinstance(simulations[0], Simulation):
+            sims = simulations  # type: ignore
+        self.simulations = sims
 
     def simulate(self):
         for simulation in self.simulations:
