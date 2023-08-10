@@ -60,7 +60,7 @@ class Simulation:
         except IndexError:
             extra_info = None
         name_shorthand = "".join(map(lambda s: s[0], name.split("_")))
-        return name_shorthand + count + ("-" + extra_info) if extra_info else ""
+        return name_shorthand + count + (("-" + extra_info) if extra_info else "")
 
     def get_short_identifier(self):
         """:returns: the short identifier for this simulation."""

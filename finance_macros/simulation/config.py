@@ -173,10 +173,21 @@ class Float(Parsable):
 
     @staticmethod
     def get_value(context: SimulationContext, input_str: str) -> float:
-        match = re.match(r"(\d+)%", input_str)
+        match = re.match(r"(\d+((.|,)\d+)?)%", input_str)
         if match:
             return float(match.group(1)) / 100
         return float(input_str)
+
+
+def cli_arg_start_date():
+    return CLIArgument("start_date", date, True, date.today(), "Start Date")
+
+
+def cli_arg_end_date(
+        additional_arg_provider: Optional[
+            Callable[[SimulationContext, Any], List[CLIArgument]]] = None):
+    return CLIArgument("end_date", date, True, None, "End Date",
+                       additional_arg_provider=additional_arg_provider)
 
 
 class Config:
@@ -203,8 +214,14 @@ class Config:
             "Investment",
             InvestmentSimulation,
             [
-                CLIArgument("start_date", date, True, date.today(), "Start Date"),
-                CLIArgument("end_date", date, display_name="End Date"),
+                cli_arg_start_date(),
+                cli_arg_end_date(
+                    lambda _, value: (
+                        [CLIArgument(
+                            "target_capital",
+                            Float,
+                            display_name="Target Capital")] if value is None else [])
+                ),
                 CLIArgument("starting_capital", Float, display_name="Starting Capital"),
                 CLIArgument("monthly_investment", Float, display_name="Monthly Investment"),
                 CLIArgument("yearly_return", Float, display_name="Yearly Return"),
@@ -215,8 +232,8 @@ class Config:
             "Mortgage",
             MortgageSimulation,
             [
-                CLIArgument("start_date", date, True, date.today(), "Start date"),
-                CLIArgument("end_date", date, display_name="End date"),
+                cli_arg_start_date(),
+                cli_arg_end_date(),
                 CLIArgument("mortgage_sum", Float, False, None,
                             "Mortgage Sum"),
                 CLIArgument("downpayment_ratio", Float, True, .2, "Downpayment ratio"),
@@ -229,17 +246,15 @@ class Config:
             "Building Society Savings Contract",
             BuildingSocietySavingsContract,
             [
-                CLIArgument("start_date", date, True, date.today(), "Start date"),
-                CLIArgument("end_date", date, display_name="End date"),
-                CLIArgument("mortgage_activation_date", date,
-                            display_name="Mortgage activation date"),
+                cli_arg_start_date(),
+                CLIArgument("contract_sum", Float, display_name="Contract sum"),
                 CLIArgument("starting_capital", Float, display_name="Starting capital"),
                 CLIArgument("savings_rate", Float, display_name="Savings rate"),
                 CLIArgument("savings_interest", Float, display_name="Savings interest"),
                 CLIArgument("mortgage_interest", Float, display_name="Mortgage interest"),
                 CLIArgument("mortgage_pay_rate", Float, optional=True,
                             display_name="Mortgage pay rate"),
-                CLIArgument("savings_sum", Float, display_name="Savings sum"),
+                CLIArgument("mortgage_downpayment_ratio", Float, False, .2, "Downpayment ratio")
             ]
         )
         self.overlay = SimulationTypeConfig(
@@ -265,7 +280,7 @@ class Config:
             "Real Estate",
             RealEstateSimulation,
             [
-                CLIArgument("start_date", date, True, date.today(), "Start date"),
+                cli_arg_start_date(),
                 CLIArgument("buy_price", Float, display_name="Buy price"),
                 CLIArgument("cash_available", Float, display_name="Cash available"),
                 CLIArgument("inflation", Float, display_name="Inflation"),
@@ -290,7 +305,10 @@ class Config:
 
     def get_simulation_type(self, key: str) -> SimulationTypeConfig:
         """Returns the simulation type with the given key."""
+        sim_types = self.get_simulation_types()
         try:
-            return next(t for t in self.get_simulation_types() if t.key == key)
+            return next(t for t in sim_types if t.key == key)
         except StopIteration as exc:
-            raise UserError(f"Simulation type '{key}' not found") from exc
+            types = [f"{type_.display_name} ({type_.key})" for type_ in sim_types]
+            raise UserError(
+                f"Simulation type '{key}' not found. Available are: {', '.join(types)}.") from exc
