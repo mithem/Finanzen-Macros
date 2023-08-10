@@ -1,13 +1,19 @@
 """Configuration for the CLI interface of the simulation module."""
 import re
 from datetime import date
-from typing import Optional, Type, List, Callable, Generic
+from typing import Optional, Type, List, Callable, Generic, Dict, Any, Tuple
 
-from finance_macros.simulation.building_society_savings_contract import \
-    BuildingSocietySavingsContract
-from finance_macros.simulation.core import T, UserError, Overlay, SimulationContext
-from finance_macros.simulation.investment import InvestmentSimulation
-from finance_macros.simulation.mortgage import MortgageSimulation
+from finance_macros.simulation.core import T, UserError, SimulationContext
+
+
+# pylint: disable=too-few-public-methods
+class Parsable(Generic[T]):
+    """Interface for objects that can be parsed from a input string."""
+
+    @staticmethod
+    def get_value(context: SimulationContext, input_str: str) -> T:
+        """Parses the input string and returns the corresponding value."""
+        raise NotImplementedError()
 
 
 class CLIArgument(Generic[T]):
@@ -19,23 +25,30 @@ class CLIArgument(Generic[T]):
     optional: bool
     default: Optional[T]
     choices_provider: Optional[Callable]
+    additional_arg_provider: Optional[
+        Callable[[SimulationContext, Optional[T]], List["CLIArgument"]]]
 
     # pylint: disable=too-many-arguments
     def __init__(self, key: str, type_: Type, optional: bool = False, default: Optional[T] = None,
                  display_name: Optional[str] = None,
-                 choices_provider: Optional[Callable[[SimulationContext], List[str]]] = None):
+                 choices_provider: Optional[Callable[[SimulationContext], List[str]]] = None,
+                 additional_arg_provider: Optional[
+                     Callable[[SimulationContext, Optional[T]], List["CLIArgument"]]] = None):
         self.key = key
         self.type = type_
         self.optional = optional
         self.default = default
         self.display_name = display_name
         self.choices_provider = choices_provider
+        self.additional_arg_provider = additional_arg_provider
+
+    def __str__(self):
+        return f"Argument('{self.key}', {self.type}, optional={self.optional})"
 
     # pylint: disable=too-many-return-statements
-    def get_value(self, value: str) -> Optional[T]:
+    def get_value(self, context: SimulationContext, value: str) -> Optional[T]:
         """Retrieves a valid value from the input string, applying type-dependent utilities (like
         %-signs for floats)."""
-        percentage_match = re.match(r"(\d+)%", value)
         match self.type:
             case type_ if type_ == bool:
                 if value:
@@ -49,11 +62,15 @@ class CLIArgument(Generic[T]):
                     return self.default
             case type_ if type_ == list:
                 if value:
-                    return value.split(",")  # type: ignore
+                    itemlistlist = [item.split(",") for item in value.split(", ")]
+                    return [item for sublist in itemlistlist for item in sublist]  # type: ignore
                 if self.optional:
                     return self.default
-            case type_ if type_ == float and percentage_match:
-                return self.get_value(percentage_match.group(1)) / 100  # type: ignore
+            case type_ if issubclass(type_, Parsable):
+                if value:
+                    return type_.get_value(context, value)  # type: ignore
+                if self.optional:
+                    return self.default
             case type_:
                 if value:
                     return type_(value)
@@ -70,8 +87,12 @@ class CLIArgument(Generic[T]):
         """Returns a string representation of the value."""
         return str(value)
 
-    def load_value(self, context: SimulationContext) -> Optional[T]:
-        """Prompt the user for the value of this argument and return it."""
+    def load_value(self, context: SimulationContext) -> Tuple[Optional[T], List["CLIArgument"]]:
+        """Prompt the user for the value of this argument and return it.
+        :param context: The simulation context."""
+        if issubclass(self.type, Promptable):
+            type_ = self.type()
+            return type_.prompt(context), []
         choices: Optional[List[str]] = self.choices_provider(
             context) if self.choices_provider else None
         if choices and self.optional:
@@ -85,29 +106,77 @@ class CLIArgument(Generic[T]):
             additional_brackets = " [default: " + self.stringify(self.default) + "]"
         else:
             additional_brackets = ""
-        value = input(
+        usr_input = input(
             f"{self.get_display_name()}{additional_brackets}: ")
-        return self.get_value(value)
+        value = self.get_value(context, usr_input)
+        additional_args = self.additional_arg_provider(
+            context,
+            value
+        ) if self.additional_arg_provider else []
+        return value, additional_args
+
+
+class Promptable(Generic[T]):
+    """Interface for objects that can be prompted for a value."""
+    args: List[CLIArgument]
+
+    def __init__(self, args: Optional[List[CLIArgument]] = None):
+        if args is None:
+            self.args = []
+        else:
+            self.args = args
+
+    def prepare_args(self, context: SimulationContext):
+        """Prepare the arguments for the prompt."""
+
+    def prompt(self, context: SimulationContext) -> T:
+        """Returns a dictionary of the arguments."""
+        self.prepare_args(context)
+        queue = self.args.copy()
+        args: Dict[str, Any] = {}
+        while queue:
+            arg = queue.pop(0)
+            value, extra_args = arg.load_value(context)
+            args[arg.key] = value
+            queue.extend(extra_args)
+
+        values = self.process_values(context, args)
+        return values
+
+    # pylint: disable=unused-argument
+    def process_values(self, context: SimulationContext, values: Dict[str, Any]) -> T:
+        """Processes the values and returns the final object."""
+        return values  # type: ignore
 
 
 # pylint: disable=too-few-public-methods
-class SimulationTypeConfig:
+class SimulationTypeConfig(Promptable):
     """Configuration for a simulation type (like investment or mortgage)."""
     key: str
     display_name: Optional[str]
     type: Type
-    arguments: List[CLIArgument]
 
     def __init__(self, name: str, display_name: Optional[str], type_: Type,
                  arguments: List[CLIArgument]):
+        super().__init__(arguments)
         self.key = name
         self.display_name = display_name
         self.type = type_
-        self.arguments = arguments
 
     def get_display_name(self) -> str:
         """Returns the display name of the simulation type, or the key if no display name is set."""
         return self.display_name if self.display_name else self.key
+
+
+class Float(Parsable):
+    """A float that can be parsed from a string."""
+
+    @staticmethod
+    def get_value(context: SimulationContext, input_str: str) -> float:
+        match = re.match(r"(\d+)%", input_str)
+        if match:
+            return float(match.group(1)) / 100
+        return float(input_str)
 
 
 class Config:
@@ -116,8 +185,17 @@ class Config:
     mortgage: SimulationTypeConfig
     building_society_savings_contract: SimulationTypeConfig
     overlay: SimulationTypeConfig
+    combination: SimulationTypeConfig
 
     def __init__(self):
+        # import here as otherwise, there would be a circular import
+        # pylint: disable=import-outside-toplevel
+        from finance_macros.simulation.combination import Combination, CombinationFunctionList
+        from finance_macros.simulation.investment import InvestmentSimulation
+        from finance_macros.simulation.mortgage import MortgageSimulation
+        from finance_macros.simulation.overlay import Overlay
+        from finance_macros.simulation.building_society_savings_contract import \
+            BuildingSocietySavingsContract
         self.investment = SimulationTypeConfig(
             "investment",
             "Investment",
@@ -125,9 +203,9 @@ class Config:
             [
                 CLIArgument("start_date", date, True, date.today(), "Start Date"),
                 CLIArgument("end_date", date, display_name="End Date"),
-                CLIArgument("starting_capital", float, display_name="Starting Capital"),
-                CLIArgument("monthly_investment", float, display_name="Monthly Investment"),
-                CLIArgument("yearly_return", float, display_name="Yearly Return"),
+                CLIArgument("starting_capital", Float, display_name="Starting Capital"),
+                CLIArgument("monthly_investment", Float, display_name="Monthly Investment"),
+                CLIArgument("yearly_return", Float, display_name="Yearly Return"),
             ]
         )
         self.mortgage = SimulationTypeConfig(
@@ -137,11 +215,11 @@ class Config:
             [
                 CLIArgument("start_date", date, True, date.today(), "Start date"),
                 CLIArgument("end_date", date, display_name="End date"),
-                CLIArgument("mortgage_sum", float, False, None,
+                CLIArgument("mortgage_sum", Float, False, None,
                             "Mortgage Sum"),
-                CLIArgument("downpayment_ratio", float, True, .2, "Downpayment ratio"),
-                CLIArgument("interest_rate", float, display_name="Interest rate"),
-                CLIArgument("monthly_payment", float, display_name="Monthly payment"),
+                CLIArgument("downpayment_ratio", Float, True, .2, "Downpayment ratio"),
+                CLIArgument("interest_rate", Float, display_name="Interest rate"),
+                CLIArgument("monthly_payment", Float, display_name="Monthly payment"),
             ]
         )
         self.building_society_savings_contract = SimulationTypeConfig(
@@ -153,13 +231,13 @@ class Config:
                 CLIArgument("end_date", date, display_name="End date"),
                 CLIArgument("mortgage_activation_date", date,
                             display_name="Mortgage activation date"),
-                CLIArgument("starting_capital", float, display_name="Starting capital"),
-                CLIArgument("savings_rate", float, display_name="Savings rate"),
-                CLIArgument("savings_interest", float, display_name="Savings interest"),
-                CLIArgument("mortgage_interest", float, display_name="Mortgage interest"),
-                CLIArgument("mortgage_pay_rate", float, optional=True,
+                CLIArgument("starting_capital", Float, display_name="Starting capital"),
+                CLIArgument("savings_rate", Float, display_name="Savings rate"),
+                CLIArgument("savings_interest", Float, display_name="Savings interest"),
+                CLIArgument("mortgage_interest", Float, display_name="Mortgage interest"),
+                CLIArgument("mortgage_pay_rate", Float, optional=True,
                             display_name="Mortgage pay rate"),
-                CLIArgument("savings_sum", float, display_name="Savings sum"),
+                CLIArgument("savings_sum", Float, display_name="Savings sum"),
             ]
         )
         self.overlay = SimulationTypeConfig(
@@ -168,8 +246,16 @@ class Config:
             Overlay,
             [
                 CLIArgument("simulations", list, display_name="Simulations",
-                            choices_provider=lambda context: [sim.get_short_identifier() for sim in
-                                                              context.simulations]),
+                            choices_provider=lambda context: context.get_short_identifiers())
+            ]
+        )
+        self.combination = SimulationTypeConfig(
+            "combination",
+            "Combination",
+            Combination,
+            [
+                CLIArgument("functions", CombinationFunctionList, display_name="Functions",
+                            additional_arg_provider=CombinationFunctionList.additional_arg_provider)
             ]
         )
 
@@ -180,6 +266,7 @@ class Config:
             self.mortgage,
             self.building_society_savings_contract,
             self.overlay,
+            self.combination
         ]
 
     def get_simulation_type(self, key: str) -> SimulationTypeConfig:
@@ -187,4 +274,4 @@ class Config:
         try:
             return next(t for t in self.get_simulation_types() if t.key == key)
         except StopIteration as exc:
-            raise UserError(f"Simulation type {key} not found") from exc
+            raise UserError(f"Simulation type '{key}' not found") from exc

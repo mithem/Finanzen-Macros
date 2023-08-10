@@ -1,6 +1,6 @@
 """Building society savings contract simulation."""
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 from finance_macros.simulation.core import TimeSeriesSimulation, SimulationContext
 from finance_macros.simulation.investment import InvestmentSimulation
@@ -80,3 +80,7 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
                 results[key] += [0] * len(mortgage_results["date"])
 
         return results
+
+    def get_column_names(self) -> List[str]:
+        return ["date", "capital", "interest", "mortgage_interest", "mortgage_pay_rate",
+                "mortgage_capital", "mortgage_capital_pay_rate"]
