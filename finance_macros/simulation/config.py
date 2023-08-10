@@ -180,12 +180,14 @@ class Float(Parsable):
 
 
 def cli_arg_start_date():
+    """:return: CLI argument for the start date of a simulation."""
     return CLIArgument("start_date", date, True, date.today(), "Start Date")
 
 
 def cli_arg_end_date(
         additional_arg_provider: Optional[
             Callable[[SimulationContext, Any], List[CLIArgument]]] = None):
+    """:return: CLI argument for the end date of a simulation."""
     return CLIArgument("end_date", date, True, None, "End Date",
                        additional_arg_provider=additional_arg_provider)
 

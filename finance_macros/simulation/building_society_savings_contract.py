@@ -23,8 +23,8 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
     mortgage_downpayment_ratio: float
     contract_sum: float
 
-    savings: Optional[InvestmentSimulation]
-    mortgage: Optional[MortgageSimulation]
+    savings: InvestmentSimulation
+    mortgage: MortgageSimulation
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
@@ -34,7 +34,7 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
                  mortgage_downpayment_ratio: float,
                  contract_sum: float):
         super().__init__(export_directory, identifier, context, start_date, None, (
-            lambda _: self.mortgage._due_amount[-1] <= 0
+            lambda _: self.mortgage.d_due_amount[-1] <= 0
         ))
         self.starting_capital = starting_capital
         self.savings_rate = savings_rate
@@ -44,21 +44,24 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
         self.mortgage_downpayment_ratio = mortgage_downpayment_ratio
         self.contract_sum = contract_sum
 
-    def simulate(self):
         self.savings = InvestmentSimulation(self.export_directory, self.identifier + "_investment",
                                             self.context,
                                             self.start_date, None,
                                             self.starting_capital,
                                             self.savings_rate, self.savings_interest,
                                             self.contract_sum * self.mortgage_downpayment_ratio)
-        self.savings.simulate()
-        results = self.savings.get_data()
-        capital = min(results["capital"].iloc[-1], self.contract_sum)
         self.mortgage = MortgageSimulation(self.export_directory, self.identifier + "_mortgage",
-                                           self.context, self.savings.end_date,
+                                           self.context, self.start_date,
                                            None,
-                                           self.contract_sum, capital / self.contract_sum,
+                                           self.contract_sum, self.mortgage_downpayment_ratio,
                                            self.mortgage_interest, self.mortgage_pay_rate)
+
+    def simulate(self):
+        self.savings.simulate()
+        capital = min(self.savings.d_capital[-1], self.contract_sum)
+        assert self.savings.end_date
+        self.mortgage.start_date = self.savings.end_date
+        self.mortgage.downpayment = capital / self.contract_sum
         self.mortgage.simulate()
 
     def get_results(self):

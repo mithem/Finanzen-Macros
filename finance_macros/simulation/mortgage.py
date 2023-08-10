@@ -16,13 +16,13 @@ class MortgageSimulation(TimeSeriesSimulation):
     yearly_interest: float
     monthly_interest: float
     monthly_payment: float
-    _due_amount: List[float]
-    _principal_paid: List[float]
-    _interest_paid: List[float]
-    _paid_cost: List[float]
-    _principal_rate: List[float]
-    _interest_rate: List[float]
-    _net_worth: List[float]
+    d_due_amount: List[float]
+    d_principal_paid: List[float]
+    d_interest_paid: List[float]
+    d_paid_cost: List[float]
+    d_principal_rate: List[float]
+    d_interest_rate: List[float]
+    d_net_worth: List[float]
     pay_off_date: Optional[date]
 
     # pylint: disable=too-many-arguments
@@ -31,7 +31,7 @@ class MortgageSimulation(TimeSeriesSimulation):
                  mortgage_sum: float,
                  downpayment_ratio: float, interest_rate: float, monthly_payment: float):
         super().__init__(export_directory, identifier, context, start_date, end_date, (
-            lambda _: self._due_amount[-1] <= 0
+            lambda _: self.d_due_amount[-1] <= 0
         ) if not end_date else None)
         self.mortgage_sum = mortgage_sum
         self.borrowed_amount = mortgage_sum * (1 - downpayment_ratio)
@@ -39,13 +39,13 @@ class MortgageSimulation(TimeSeriesSimulation):
         self.yearly_interest = interest_rate
         self.monthly_interest = self.calculate_monthly_interest()
         self.monthly_payment = monthly_payment
-        self._due_amount = [self.borrowed_amount]
-        self._principal_paid = [0]
-        self._interest_paid = [0]
-        self._paid_cost = [self.downpayment]
-        self._principal_rate = [0]
-        self._interest_rate = [0]
-        self._net_worth = [self.mortgage_sum - self._due_amount[-1]]
+        self.d_due_amount = [self.borrowed_amount]
+        self.d_principal_paid = [0]
+        self.d_interest_paid = [0]
+        self.d_paid_cost = [self.downpayment]
+        self.d_principal_rate = [0]
+        self.d_interest_rate = [0]
+        self.d_net_worth = [self.mortgage_sum - self.d_due_amount[-1]]
 
     def calculate_monthly_interest(self) -> float:
         """Calculate the monthly interest rate from the yearly interest rate."""
@@ -53,26 +53,26 @@ class MortgageSimulation(TimeSeriesSimulation):
 
     def pay_for_month(self):
         """Simulate a monthly payment."""
-        new_interest_paid = self._due_amount[-1] * self.monthly_interest
+        new_interest_paid = self.d_due_amount[-1] * self.monthly_interest
         principal_paid = self.monthly_payment - new_interest_paid
-        self._interest_paid.append(self._interest_paid[-1] + new_interest_paid)
-        self._principal_paid.append(self._principal_paid[-1] + principal_paid)
-        self._due_amount.append(self._due_amount[-1] - principal_paid)
-        self._paid_cost.append(self._paid_cost[-1] + self.monthly_payment)
-        self._principal_rate.append(principal_paid)
-        self._interest_rate.append(new_interest_paid)
-        self._net_worth.append(self.mortgage_sum - self._due_amount[-1])
+        self.d_interest_paid.append(self.d_interest_paid[-1] + new_interest_paid)
+        self.d_principal_paid.append(self.d_principal_paid[-1] + principal_paid)
+        self.d_due_amount.append(self.d_due_amount[-1] - principal_paid)
+        self.d_paid_cost.append(self.d_paid_cost[-1] + self.monthly_payment)
+        self.d_principal_rate.append(principal_paid)
+        self.d_interest_rate.append(new_interest_paid)
+        self.d_net_worth.append(self.mortgage_sum - self.d_due_amount[-1])
 
     def get_results(self):
         return {
-            "principal_paid": self._principal_paid,
-            "interest_paid": self._interest_paid,
-            "due_amount": self._due_amount,
-            "paid_cost": self._paid_cost,
-            "principal_rate": self._principal_rate,
-            "interest_rate": self._interest_rate,
-            "net_worth": self._net_worth,
-            "date": self._dates
+            "principal_paid": self.d_principal_paid,
+            "interest_paid": self.d_interest_paid,
+            "due_amount": self.d_due_amount,
+            "paid_cost": self.d_paid_cost,
+            "principal_rate": self.d_principal_rate,
+            "interest_rate": self.d_interest_rate,
+            "net_worth": self.d_net_worth,
+            "date": self.d_dates
         }
 
     def simulate(self):
@@ -81,8 +81,8 @@ class MortgageSimulation(TimeSeriesSimulation):
             day_of_month=1
         )
         try:
-            idx = self._due_amount.index(next(filter(lambda x: x <= 0, self._due_amount)))
-            self.pay_off_date = self._dates[idx]
+            idx = self.d_due_amount.index(next(filter(lambda x: x <= 0, self.d_due_amount)))
+            self.pay_off_date = self.d_dates[idx]
         except StopIteration:
             self.pay_off_date = None
         print("Pay off date: ", self.pay_off_date)

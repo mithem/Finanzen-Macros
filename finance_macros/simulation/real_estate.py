@@ -1,3 +1,4 @@
+"""Real estate simulation."""
 from datetime import date
 from typing import Dict, List
 
@@ -7,7 +8,10 @@ from finance_macros.simulation.mortgage import MortgageSimulation
 from finance_macros.simulation.overlay import Overlay
 
 
+# pylint: disable=too-many-instance-attributes
 class RealEstateSimulation(Simulation):
+    """A simulation of a real estate investment, with a fixed monthly investment and a fixed yearly
+    return. Does not include taxes or maintenance costs, or value appreciation."""
     start_date: date
     buy_price: float
     cash_available: float
@@ -24,6 +28,7 @@ class RealEstateSimulation(Simulation):
     downpayment_mortgage: MortgageSimulation
     overlay: Overlay
 
+    # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
                  start_date: date, buy_price: float, cash_available: float, inflation: float,
                  pay_rate: float,
@@ -85,14 +90,16 @@ class RealEstateSimulation(Simulation):
             self.mortgage_interest,
             self.pay_rate + self.rent
         )
-        sims = [self.cash_buy_investment, self.immediate_mortgage,
-                self.invest_till_downpayment_investment, self.downpayment_mortgage]
+        sims: List[Simulation] = [self.cash_buy_investment, self.immediate_mortgage,
+                                  self.invest_till_downpayment_investment,
+                                  self.downpayment_mortgage]
         self.overlay = Overlay(export_directory, identifier, context, sims)
 
     def simulate(self):
         for sim in [self.cash_buy_investment, self.immediate_mortgage,
                     self.invest_till_downpayment_investment]:
             sim.simulate()
+        assert self.invest_till_downpayment_investment.end_date
         self.downpayment_mortgage.start_date = self.invest_till_downpayment_investment.end_date
         self.downpayment_mortgage.simulate()
 

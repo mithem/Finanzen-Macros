@@ -101,7 +101,7 @@ class TimeSeriesSimulation(Simulation):
     """Base class for simulations that are run over a period of time."""
     start_date: datetime.date
     end_date: Optional[datetime.date]
-    _dates: List[datetime.date]
+    d_dates: List[datetime.date]
 
     end_condition_achieved_callback: Optional[Callable[[datetime.date], bool]]
 
@@ -116,7 +116,7 @@ class TimeSeriesSimulation(Simulation):
         condition achieved callback must be given to calculate an appropriate end date."
         self.start_date = starting_date
         self.end_date = end_date
-        self._dates = [self.start_date]
+        self.d_dates = [self.start_date]
 
         self.end_condition_achieved_callback = end_condition_achieved_callback
 
@@ -137,7 +137,7 @@ class TimeSeriesSimulation(Simulation):
             if monthly_callback and date.day == day_of_month:
                 monthly_callback(date)
             if daily_callback or (monthly_callback and date.day == day_of_month):
-                self._dates.append(date)
+                self.d_dates.append(date)
             if self.end_condition_achieved_callback:
                 if self.end_condition_achieved_callback(date):
                     self.end_date = date

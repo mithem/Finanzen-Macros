@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 from finance_macros.simulation.core import TimeSeriesSimulation, SimulationContext
 
 
+# pylint: disable=too-many-instance-attributes
 class InvestmentSimulation(TimeSeriesSimulation):
     """A simulation of an investment account, with a fixed monthly investment and a fixed yearly
     return."""
@@ -13,9 +14,9 @@ class InvestmentSimulation(TimeSeriesSimulation):
     monthly_investment: float
     yearly_return: float
     daily_return: float
-    _capital: List[float]
-    _profit: List[float]
-    _paid_in: List[float]
+    d_capital: List[float]
+    d_profit: List[float]
+    d_paid_in: List[float]
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
@@ -24,16 +25,19 @@ class InvestmentSimulation(TimeSeriesSimulation):
                  monthly_investment: float, yearly_return: float,
                  target_capital: Optional[float] = None):
         assert end_date or target_capital, "Either end_date or target_capital must be specified."
-        super().__init__(export_directory, identifier, context, start_date, end_date, (
-            lambda _: self._capital[-1] >= self.target_capital) if target_capital else None)
         self.starting_capital = starting_capital
         self.target_capital = target_capital
         self.monthly_investment = monthly_investment
         self.yearly_return = yearly_return
         self.daily_return = self.calculate_daily_return()
-        self._capital = [self.starting_capital]
-        self._profit = [0]
-        self._paid_in = [self.starting_capital]
+        self.d_capital = [self.starting_capital]
+        self.d_profit = [0]
+        self.d_paid_in = [self.starting_capital]
+        super().__init__(export_directory, identifier, context, start_date, end_date, (
+            lambda _: (
+                    self.target_capital is not None and self.d_capital[-1] >= self.target_capital
+            )
+        ) if self.target_capital else None)
 
     def calculate_daily_return(self) -> float:
         """Calculate the daily return from the yearly return."""
@@ -41,20 +45,20 @@ class InvestmentSimulation(TimeSeriesSimulation):
 
     def invest_one_day(self):
         """Simulate one day of investment (not monthly buy-ins)."""
-        profit = self._capital[-1] * self.daily_return
-        self._capital.append(self._capital[-1] + profit)
-        self._profit.append(profit)
-        self._paid_in.append(self._paid_in[-1])
+        profit = self.d_capital[-1] * self.daily_return
+        self.d_capital.append(self.d_capital[-1] + profit)
+        self.d_profit.append(profit)
+        self.d_paid_in.append(self.d_paid_in[-1])
 
     def invest_one_month(self):
         """Simulate the invest-day of the month. Alters the latest simulation parameters to replace
         the day-altered ones."""
-        self._capital[-1] += self.monthly_investment
-        self._paid_in[-1] += self.monthly_investment
+        self.d_capital[-1] += self.monthly_investment
+        self.d_paid_in[-1] += self.monthly_investment
 
     def get_results(self) -> Dict:
-        return {"capital": self._capital, "profit": self._profit, "paid_in": self._paid_in,
-                "date": self._dates}
+        return {"capital": self.d_capital, "profit": self.d_profit, "paid_in": self.d_paid_in,
+                "date": self.d_dates}
 
     def simulate(self):
         self.call_simulation_functions(
