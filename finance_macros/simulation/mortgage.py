@@ -13,6 +13,7 @@ class MortgageSimulation(TimeSeriesSimulation):
     mortgage_sum: float
     borrowed_amount: float
     downpayment: float
+    downpayment_ratio: float
     yearly_interest: float
     monthly_interest: float
     monthly_payment: float
@@ -27,20 +28,26 @@ class MortgageSimulation(TimeSeriesSimulation):
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 start_date: date, end_date: Optional[date],
-                 mortgage_sum: float,
-                 downpayment_ratio: float, interest_rate: float, monthly_payment: float):
-        super().__init__(export_directory, identifier, context, start_date, end_date, (
+                 start_date: date, m_end_date: Optional[date],
+                 m_mortgage_sum: float,
+                 m_downpayment_ratio: float, m_interest_rate: float, m_monthly_payment: float,
+                 automatic_identifier_counting: bool = True):
+        super().__init__(export_directory, identifier, context, start_date, m_end_date, (
             lambda _: self.d_due_amount[-1] <= 0
-        ) if not end_date else None)
-        self.mortgage_sum = mortgage_sum
-        self.borrowed_amount = mortgage_sum * (1 - downpayment_ratio)
-        self.downpayment = mortgage_sum * downpayment_ratio
-        self.yearly_interest = interest_rate
+        ) if not m_end_date else None, automatic_identifier_counting)
+        self.mortgage_sum = m_mortgage_sum
+        self.downpayment_ratio = m_downpayment_ratio
+        self.yearly_interest = m_interest_rate
+        self.monthly_payment = m_monthly_payment
+        self.reset_data()
+
+    def reset_data(self):
+        self.reset_time_series_data()
+        self.borrowed_amount = self.mortgage_sum * (1 - self.downpayment_ratio)
+        self.downpayment = self.mortgage_sum * self.downpayment_ratio
         self.monthly_interest = self.calculate_monthly_interest()
-        self.monthly_payment = monthly_payment
         self.d_due_amount = [self.borrowed_amount]
-        self.d_principal_paid = [0]
+        self.d_principal_paid = [self.downpayment]
         self.d_interest_paid = [0]
         self.d_paid_cost = [self.downpayment]
         self.d_principal_rate = [0]

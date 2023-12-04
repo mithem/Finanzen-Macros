@@ -1,11 +1,24 @@
 """Plotly graphs for the finance visualizations."""
+import math
+from typing import Dict, List
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 
 from finance_macros.data_visualization import FIXED_SCENARIO_RETURN, DATE_COLUMN
+from finance_macros.depot_composition import PortfolioComposition, PositionType, PositionGroup
 
 INDICATOR_REFERENCE_DAY_INTERVAL = 7
+
+
+def get_latest_values(data: pd.DataFrame) -> pd.DataFrame:
+    """Get the latest values of the given dataframe."""
+    keys = data.keys()[1:]
+    index = -1
+    while not all(not math.isnan(data[1:].iloc[index][key]) for key in keys):
+        index -= 1
+    return data[1:].iloc[index]
 
 
 def get_fortune_history_line_plot(net_worth_history: pd.DataFrame, avg_return: float) -> go.Figure:
@@ -121,7 +134,7 @@ def get_net_worth_bubble_chart(net_worth_history: pd.DataFrame) -> go.Figure:
 def get_depot_composition_by_shares_pie(composition_history: pd.DataFrame) -> go.Figure:
     """Get a pie chart of the current depot composition by shares."""
     labels = composition_history.keys()[1:]
-    values = composition_history.iloc[-1][1:]
+    values = get_latest_values(composition_history).values
     return go.Figure(data=[go.Pie(labels=labels, values=values, textinfo="label+percent+value")],
                      layout_title_text="Depot Composition (shares)")
 
@@ -129,7 +142,7 @@ def get_depot_composition_by_shares_pie(composition_history: pd.DataFrame) -> go
 def get_depot_composition_by_value_pie(value_history: pd.DataFrame) -> go.Figure:
     """Get a pie chart of the current depot composition by value."""
     labels = value_history.keys()[1:]
-    values = value_history.iloc[-1][1:]
+    values = get_latest_values(value_history).values
     return go.Figure(data=[go.Pie(labels=labels, values=values, textinfo="label+percent+value")],
                      layout_title_text="Depot Composition (value)")
 
@@ -156,6 +169,18 @@ def get_depot_value_history_area_plot(value_history: pd.DataFrame) -> go.Figure:
     """Get an area plot of the depot value history."""
     labels = value_history.keys()[1:]
     return px.area(value_history, x=DATE_COLUMN, y=labels, title="Stock Values")
+
+
+def get_depot_share_history_line_plot(share_history: pd.DataFrame) -> go.Figure:
+    """Get a line plot of the depot share history."""
+    labels = share_history.keys()[1:]
+    return px.line(share_history, x=DATE_COLUMN, y=labels, title="Depot Share History")
+
+
+def get_depot_share_history_area_plot(share_history: pd.DataFrame) -> go.Figure:
+    """Get an area plot of the depot share history."""
+    labels = share_history.keys()[1:]
+    return px.area(share_history, x=DATE_COLUMN, y=labels, title="Depot Share History")
 
 
 def get_avg_performance_gauge(avg_return: float) -> go.Figure:
@@ -242,3 +267,89 @@ def get_depot_value_gauge(net_worth_history: pd.DataFrame, mvg_avg: pd.DataFrame
 def get_stock_quote_line(quote_history: pd.DataFrame) -> go.Figure:
     """Get a line plot of the stock quotes."""
     return px.line(quote_history, x=DATE_COLUMN, y=quote_history.keys()[1:], title="Quotes")
+
+
+def _get_parent_name_from_type(type: PositionType) -> str:
+    parent = PositionType.get_parent(type)
+    return parent.value if parent else ""
+
+
+def _get_name_from_group(group: PositionGroup) -> str:
+    if group == PositionGroup.DEFAULT():
+        return "Default"
+    return group.display_value
+
+
+def _get_net_worth_position_type_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
+    str, List[str | float]]:
+    data = portfolio.get_position_type_value_composition()
+    pos_types = data.keys()
+    return {
+        "labels": list(map(lambda type: type.value, pos_types)),
+        "parents": list(map(_get_parent_name_from_type, pos_types)),
+        "values": [data[type] for type in pos_types],
+    }
+
+
+def get_net_worth_position_type_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    data = {
+        **_get_net_worth_position_type_hierarchical_map(portfolio),
+        "branchvalues": "total"
+    }
+    return go.Figure(go.Sunburst(**data, textinfo="label+percent entry+value"),
+                     layout_title_text="Net worth composition by position type", layout_height=700)
+
+
+def get_net_worth_position_type_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    data = _get_net_worth_position_type_hierarchical_map(portfolio)
+    return go.Figure(go.Treemap(**data), layout_title_text="Net worth composition by position type")
+
+
+def _get_net_worth_position_summary_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
+    str, List[str | float]]:
+    labels = []
+    parents = []
+    values = []
+
+    # individual positions
+    for position in portfolio.positions:
+        labels.append(position.name)
+        parents.append(position.type.value)
+        values.append(position.value)
+
+    # position types
+    data = portfolio.get_position_type_value_composition()
+    pos_types = data.keys()
+    for type in pos_types:
+        labels.append(type.value)
+        parents.append(_get_parent_name_from_type(type))
+        values.append(data[type])
+
+    return {
+        "labels": labels,
+        "parents": parents,
+        "values": values
+    }
+
+
+def get_net_worth_position_summary_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    data = {
+        **_get_net_worth_position_summary_hierarchical_map(portfolio),
+        "branchvalues": "total"
+    }
+    return go.Figure(go.Sunburst(**data, textinfo="label+percent entry+value"),
+                     layout_title_text="Position summary")
+
+
+def get_net_worth_position_summary_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    data = _get_net_worth_position_summary_hierarchical_map(portfolio)
+    return go.Figure(go.Treemap(**data), layout_title_text="Position summary")
+
+
+def get_net_worth_position_group_pie(portfolio: PortfolioComposition) -> go.Figure:
+    data = portfolio.get_group_value_composition()
+    groups = data.keys()
+    labels = list(map(_get_name_from_group, groups))
+    values = [data[group] for group in groups]
+    return go.Figure(data=[go.Pie(labels=labels, values=values, textinfo="label+percent+value")],
+                     layout_title_text="Net worth composition by position group")

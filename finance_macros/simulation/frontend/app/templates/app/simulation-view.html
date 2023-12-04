@@ -1,0 +1,65 @@
+{% extends "app/base.html" %}
+{% block scripts %}
+    <script>
+        async function simulate(args) {
+            document.getElementById("simulation-status").innerText = "Simulating";
+            document.getElementById("simulation-id").innerText = "pending";
+            const params = {
+                simulation_type: "{{ simulation_type.key }}",
+                args: JSON.stringify(args)
+            };
+            const url = "{% url 'simulate' %}?" + new URLSearchParams(params);
+            const response = await fetch(url);
+            if (!response.ok) {
+                const text = await response.text()
+                alert("Error: " + text);
+                return;
+            }
+            const data = await response.json();
+            document.getElementById("simulation-id").innerText = data.identifier;
+            await getResults(data.identifier);
+        }
+
+        async function getResults(identifier) {
+            document.getElementById("simulation-status").innerText = "Retrieving results";
+            const params = {
+                identifier: identifier
+            };
+            const url = "{% url 'get-simulation-results' %}?" + new URLSearchParams(params);
+            const response = await fetch(url);
+            if (!response.ok) {
+                alert("Error: " + await response.text());
+                return;
+            }
+            const parsed = await response.json();
+            const linePlot = document.getElementById("line-plot");
+            const tablePlot = document.getElementById("table-plot");
+            Plotly.newPlot(linePlot, parsed.data.line);
+            Plotly.newPlot(tablePlot, parsed.data.table);
+            document.getElementById("simulation-status").innerText = "Done";
+        }
+
+        async function getResultsForIdentifier() {
+            const identifier = prompt("Enter identifier");
+            if (identifier === null) {
+                return;
+            }
+            await getResults(identifier);
+        }
+    </script>
+    {% load static %}
+    <script src="{% static 'js/plotly.js' %}"></script>
+{% endblock scripts %}
+
+{% block content %}
+    <h1>{{ simulation_type.display_name }}</h1>
+    <p>Identifier: <span id="simulation-id">N/A</span></p>
+    <p>Status: <span id="simulation-status">Ready</span></p>
+    <button onClick="getResultsForIdentifier()">Get Results</button>
+    {% include 'app/configuration-form.html' with args=simulation_type.args args_json=args_json submit_handler="simulate" simulation_context=simulation_context %}
+    <h2>Results</h2>
+    <div id="results">
+        <div id="line-plot"></div>
+        <div id="table-plot"></div>
+    </div>
+{% endblock content %}

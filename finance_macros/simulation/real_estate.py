@@ -15,7 +15,6 @@ class RealEstateSimulation(Simulation):
     start_date: date
     buy_price: float
     cash_available: float
-    inflation: float
     pay_rate: float
     rent: float
     investment_return: float
@@ -30,70 +29,73 @@ class RealEstateSimulation(Simulation):
 
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 start_date: date, buy_price: float, cash_available: float, inflation: float,
-                 pay_rate: float,
-                 rent: float, investment_return: float, mortgage_interest: float,
-                 target_downpayment: float):
+                 start_date: date, re_buy_price: float, re_cash_available: float,
+                 re_pay_rate: float,
+                 re_rent: float, re_investment_return: float, re_mortgage_interest: float,
+                 re_target_downpayment: float):
         super().__init__(export_directory, identifier, context)
         self.start_date = start_date
-        self.buy_price = buy_price
-        self.cash_available = cash_available
-        self.inflation = inflation
-        self.pay_rate = pay_rate
-        self.rent = rent
-        self.investment_return = investment_return
-        self.mortgage_interest = mortgage_interest
-        self.target_downpayment = target_downpayment
+        self.buy_price = re_buy_price
+        self.cash_available = re_cash_available
+        self.pay_rate = re_pay_rate
+        self.rent = re_rent
+        self.investment_return = re_investment_return
+        self.mortgage_interest = re_mortgage_interest
+        self.target_downpayment = re_target_downpayment * self.buy_price
 
         self.cash_buy_investment = InvestmentSimulation(
             export_directory,
-            identifier + "-cash-inv",
+            self.identifier + "-cash-inv",
             context,
             self.start_date,
             None,
             self.cash_available,
             self.pay_rate,
             self.investment_return,
-            self.buy_price
+            self.buy_price,
+            False
         )
         downpayment_ratio = self.cash_available / self.buy_price
         self.immediate_mortgage = MortgageSimulation(
             export_directory,
-            identifier + "-immediate-mortg",
+            self.identifier + "-immediate-mortg",
             context,
             self.start_date,
             None,
             self.buy_price,
             downpayment_ratio,
             self.mortgage_interest,
-            self.pay_rate + self.rent
+            self.pay_rate + self.rent,
+            False
         )
         self.invest_till_downpayment_investment = InvestmentSimulation(
             export_directory,
-            identifier + "-downpayment-inv",
+            self.identifier + "-downpayment-inv",
             context,
             self.start_date,
             None,
             self.cash_available,
             self.pay_rate,
             self.investment_return,
-            self.target_downpayment
+            self.target_downpayment,
+            False
         )
         self.downpayment_mortgage = MortgageSimulation(
             export_directory,
-            identifier + "-downpayment-mortg",
+            self.identifier + "-downpayment-mortg",
             context,
             self.start_date,
             None,
             self.buy_price,
             self.target_downpayment / self.buy_price,
             self.mortgage_interest,
-            self.pay_rate + self.rent
+            self.pay_rate + self.rent,
+            False
         )
         sims: List[Simulation] = [self.cash_buy_investment, self.immediate_mortgage,
                                   self.invest_till_downpayment_investment,
                                   self.downpayment_mortgage]
-        self.overlay = Overlay(export_directory, identifier, context, sims)
+        self.overlay = Overlay(export_directory, identifier, context, sims, False)
 
     def simulate(self):
         for sim in [self.cash_buy_investment, self.immediate_mortgage,

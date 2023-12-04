@@ -14,6 +14,8 @@ try:
     model = desktop.getCurrentComponent()
     sheet = model.getSheets().getByName("Sparen")
     EXPORT_DIRECTORY = sheet.getCellByPosition(8, 11).getString()
+    NET_WORTH_CELL = sheet.getCellByPosition(NET_WORTH_COLUMN, 45)
+    DEPOT_VALUE_CELL = sheet.getCellByPosition(NET_WORTH_COLUMN, 46)
 except NameError:  # running tests
     EXPORT_DIRECTORY = "~/"
 
@@ -37,8 +39,8 @@ def snapshot_net_worth(*args):  # pylint: disable=invalid-name,unused-argument
         date = _get_date_value(row)
 
     today = datetime.date.today()
-    current_net_worth = sheet.getCellByPosition(NET_WORTH_COLUMN, 49).getValue()
-    current_depot_value = sheet.getCellByPosition(5, 50).getValue()
+    current_net_worth = NET_WORTH_CELL.getValue()
+    current_depot_value = DEPOT_VALUE_CELL.getValue()
 
     sheet.getCellByPosition(DATE_COLUMN, row).setValue(_date_value(today))
     sheet.getCellByPosition(NET_WORTH_COLUMN, row).setValue(current_net_worth)

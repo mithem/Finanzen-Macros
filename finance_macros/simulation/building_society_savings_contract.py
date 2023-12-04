@@ -29,20 +29,20 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
     # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
                  start_date: date,
-                 starting_capital: float, savings_rate: float, savings_interest: float,
-                 mortgage_interest: float, mortgage_pay_rate: Optional[float],
-                 mortgage_downpayment_ratio: float,
-                 contract_sum: float):
+                 bsc_starting_capital: float, bsc_savings_rate: float, bsc_savings_interest: float,
+                 bsc_mortgage_interest: float, bsc_mortgage_pay_rate: Optional[float],
+                 bsc_mortgage_downpayment_ratio: float,
+                 bsc_contract_sum: float):
         super().__init__(export_directory, identifier, context, start_date, None, (
             lambda _: self.mortgage.d_due_amount[-1] <= 0
         ))
-        self.starting_capital = starting_capital
-        self.savings_rate = savings_rate
-        self.savings_interest = savings_interest
-        self.mortgage_pay_rate = mortgage_pay_rate if mortgage_pay_rate else savings_rate
-        self.mortgage_interest = mortgage_interest
-        self.mortgage_downpayment_ratio = mortgage_downpayment_ratio
-        self.contract_sum = contract_sum
+        self.starting_capital = bsc_starting_capital
+        self.savings_rate = bsc_savings_rate
+        self.savings_interest = bsc_savings_interest
+        self.mortgage_pay_rate = bsc_mortgage_pay_rate if bsc_mortgage_pay_rate else bsc_savings_rate
+        self.mortgage_interest = bsc_mortgage_interest
+        self.mortgage_downpayment_ratio = bsc_mortgage_downpayment_ratio
+        self.contract_sum = bsc_contract_sum
 
         self.savings = InvestmentSimulation(self.export_directory, self.identifier + "_investment",
                                             self.context,
@@ -62,6 +62,7 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
         assert self.savings.end_date
         self.mortgage.start_date = self.savings.end_date
         self.mortgage.downpayment = capital / self.contract_sum
+        self.mortgage.reset_data()
         self.mortgage.simulate()
 
     def get_results(self):

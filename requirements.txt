@@ -13,3 +13,4 @@ nbstripout
 dash
 darkdetect
 yahoofinancials
+Django

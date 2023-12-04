@@ -71,7 +71,7 @@ def get_stock_quotes(depot_composition_history: pd.DataFrame) -> pd.DataFrame:
         pd.Timestamp.fromisoformat(sheet[position]["prices"][i]["formatted_date"]) for i
         in
         range(len(sheet[position]["prices"]))], (max_count - len(sheet[position]["prices"]), 0),
-        constant_values=sheet[position]["prices"][0]["formatted_date"])
+        constant_values=pd.Timestamp.fromisoformat(sheet[position]["prices"][0]["formatted_date"]))
     for position in positions:
         df[position] = data[position]
     return df
@@ -79,7 +79,8 @@ def get_stock_quotes(depot_composition_history: pd.DataFrame) -> pd.DataFrame:
 
 def interpolate_data_nonlinear(data: pd.DataFrame, index_column: str,
                                start_date: Optional[pd.Timestamp] = None,
-                               end_date: Optional[pd.Timestamp] = None) -> pd.DataFrame:
+                               end_date: Optional[pd.Timestamp] = None,
+                               pad_edges=False) -> pd.DataFrame:
     """Interpolate data using a nonlinear interpolation method.
 
     Start at the first date of the data or the given start date and end at the last date of the data
@@ -103,8 +104,13 @@ def interpolate_data_nonlinear(data: pd.DataFrame, index_column: str,
                 last_values[key] = value
                 new_data[key].append(value)
         else:
-            for key in keys:
-                new_data[key].append(last_values[key])
+            if not pad_edges and (
+                    date < data[index_column].iloc[0] or date > data[index_column].iloc[-1]):
+                for key in keys:
+                    new_data[key].append(None)
+            else:
+                for key in keys:
+                    new_data[key].append(last_values[key])
         new_data[index_column].append(date)
         date += datetime.timedelta(days=1)
     return pd.DataFrame(new_data)

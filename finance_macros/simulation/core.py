@@ -6,16 +6,27 @@ from typing import Callable, List, Dict, Optional, TypeVar
 
 import pandas as pd
 
+CSV_FILE_COUNT_PER_SIM_TYPE = {}
+
 
 class Simulation:
     """Base class for financial simulations"""
     export_directory: str
     identifier: str
+    context: "SimulationContext"
 
-    def __init__(self, export_directory: str, identifier: str, context):
+    def __init__(self, export_directory: str, identifier: str, context: "SimulationContext",
+                 automatic_identifier_counting: bool = True):
+        if automatic_identifier_counting:
+            id_counter = CSV_FILE_COUNT_PER_SIM_TYPE.get(identifier, 1)
+            CSV_FILE_COUNT_PER_SIM_TYPE[identifier] = id_counter + 1
+            identifier_str = identifier + "_" + str(id_counter)
+        else:
+            identifier_str = identifier
         self.export_directory = export_directory
-        self.identifier = identifier
+        self.identifier = identifier_str
         self.context = context
+        self.context.add_simulation(self)
 
     def simulate(self):
         """Run the simulation, saving its state only in the simulation object itself."""
@@ -80,20 +91,27 @@ class SimulationContext:
     def add_simulation(self, simulation: Simulation):
         """Add a simulation to the context.
         :param simulation: the simulation to add to the context."""
-        self.simulations.append(simulation)
+        if not simulation.identifier in map(lambda sim: sim.identifier, self.simulations):
+            self.simulations.append(simulation)
 
     def get_simulations_with_ids(self, *identifiers: str) -> List[Simulation]:
         """Get all simulations with one of the given identifiers.
         :param identifiers: the identifiers to search for.
         :returns: all simulations with the given identifier."""
-        short_ids = [Simulation.make_short_identifier(identifier) for identifier in identifiers]
-        return list(
-            filter(lambda s: s.identifier in identifiers or s.get_short_identifier() in short_ids,
-                   self.simulations))
+        results = []
+        for identifier in identifiers:
+            results += list(filter(
+                lambda s: s.identifier == identifier or s.get_short_identifier() == identifier,
+                self.simulations))
+        return results
 
     def get_short_identifiers(self) -> List[str]:
         """:returns: the short identifiers of all simulations in the context."""
         return list(map(lambda s: s.get_short_identifier(), self.simulations))
+
+    def reset(self):
+        """Reset the context to its initial state."""
+        self.simulations = []
 
 
 # pylint: disable=abstract-method
@@ -110,15 +128,19 @@ class TimeSeriesSimulation(Simulation):
                  starting_date: datetime.date,
                  end_date: Optional[datetime.date] = None,
                  end_condition_achieved_callback: Optional[
-                     Callable[[datetime.date], bool]] = None):
-        super().__init__(export_directory, identifier, context)
+                     Callable[[datetime.date], bool]] = None,
+                 automatic_identifier_counting: bool = True):
+        super().__init__(export_directory, identifier, context, automatic_identifier_counting)
         assert end_date or end_condition_achieved_callback, "Either an end date or an end \
         condition achieved callback must be given to calculate an appropriate end date."
         self.start_date = starting_date
         self.end_date = end_date
-        self.d_dates = [self.start_date]
+        self.reset_time_series_data()
 
         self.end_condition_achieved_callback = end_condition_achieved_callback
+
+    def reset_time_series_data(self):
+        self.d_dates = [self.start_date]
 
     def call_simulation_functions(self,
                                   daily_callback: Optional[Callable[[datetime.date], None]] = None,

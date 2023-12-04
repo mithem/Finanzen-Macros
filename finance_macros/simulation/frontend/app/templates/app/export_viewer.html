@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Export Viewer</title>
+</head>
+<body>
+<h1>Export Viewer</h1>
+{%for sim, data in export_data.items%}
+<h2>{{sim}}</h2>
+{{data.table_html}}
+{{data.chart_html}}
+{%endfor%}
+</body>
+</html>

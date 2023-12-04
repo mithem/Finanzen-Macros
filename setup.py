@@ -17,7 +17,8 @@ requirements = [
     "nbstripout",
     "dash",
     "darkdetect",
-    "yahoofinancials"
+    "yahoofinancials",
+    "Django"
 ]
 
 with open("requirements.txt", "w", encoding="utf-8") as f:
@@ -26,6 +27,6 @@ with open("requirements.txt", "w", encoding="utf-8") as f:
 setup(
     name="finance_macros",
     version=VERSION,
-    packages=["finance_macros"],
+    packages=["finance_macros", "finance_macros.simulation", "finance_macros.data_visualization"],
     install_requires=requirements,
 )

@@ -1,0 +1,71 @@
+{% load fm_filters %}
+<h2>Configuration</h2>
+{% load static %}
+<script src="{% static 'js/CLIArgument.js' %}"></script>
+<script>
+    function getArgumentsWithValues(arguments) {
+        let args = [];
+        for (let arg of arguments) {
+            args.push({
+                key: arg.key,
+                type: arg.type,
+                display_name: arg.display_name,
+                value: arg.value
+            })
+        }
+        return args
+    }
+
+    async function promptForAdditionalArgs(arguments) {
+        if (arguments.length === 0) {
+            return []
+        }
+        let params = {
+            args: encodeURIComponent(JSON.stringify(arguments))
+        }
+        let url = "{% url 'additional-args' %}" + "?" + new URLSearchParams(params);
+        const response = await fetch(url);
+        if (!response.ok) {
+            let msg = "Error: " + await response.text();
+            alert(msg);
+            throw Error(msg);
+        }
+        const json = await response.json();
+        const additional_args = json.additional_args;
+        const args_to_send = [];
+        for (let arg of additional_args) {
+            arg = CLIArgument.fromJSON(arg);
+            arg.setValue(prompt(arg.display_name));
+            args_to_send.push(arg)
+        }
+        let additionalArgsForAdditionalArg = await promptForAdditionalArgs(args_to_send);
+        arguments = arguments.concat(additionalArgsForAdditionalArg);
+        return arguments
+    }
+
+    async function submit() {
+        let argsJson = '{{ args_json|safe|replacing:'\\"::\\\"'|safe}}';
+        let args = JSON.parse(argsJson);
+        let arguments = args.map(arg => CLIArgument.fromJSON(arg));
+        for (let arg of arguments) {
+            let input = document.getElementsByName(arg.key)[0];
+            if (!input) {
+                continue // promptable args are not displayed in the form directly (their subargs are)
+            }
+            let toggle = document.getElementsByName(arg.key + "_toggle")[0]
+            if (toggle && !toggle.checked) {
+                arg.setValue(null);
+            } else if (input.type === "checkbox") {
+                arg.setValue(input.checked)
+            } else {
+                arg.setValue(input.value)
+            }
+        }
+        arguments = await promptForAdditionalArgs(arguments);
+        await {{ submit_handler }}(arguments);
+    }
+</script>
+<fieldset>
+    {% include 'app/promptable-fields.html' with args=args simulation_context=simulation_context %}
+    <button onClick="submit()">Simulate</button>
+</fieldset>

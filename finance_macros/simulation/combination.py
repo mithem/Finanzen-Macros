@@ -91,8 +91,8 @@ class Combination(Simulation):
         @staticmethod
         def get_value(context: SimulationContext,
                       input_str: str) -> "Combination.CombinationFunction":
-            pattern = r"(?P<sim1>[\w\d]+)\.(?P<key1>[\w\d]+) ?(?P<operation>.{1,4}?) ?\
-(?P<sim2>[\w\d]+)\.(?P<key2>[\w\d]+)"
+            pattern = r"(?P<sim1>[\w\d]+)\.(?P<key1>[\w\d]+) *(?P<operation>.{1,4}?) *" + \
+                      r"(?P<sim2>[\w\d]+)\.(?P<key2>[\w\d]+)"
             match = re.match(pattern, input_str)
             if match:
                 sim1 = match.group("sim1")
@@ -122,36 +122,39 @@ class Combination(Simulation):
                 short_id = simulation.get_short_identifier()
                 column = short_id + "_" + self.columns[i]
                 for j in range(len(data[self.key])):
-                    match self.operation:
-                        case CombinationOperation.ADD:
-                            data[self.key][j] += \
-                                data[column][j]
-                        case CombinationOperation.SUBTRACT:
-                            data[self.key][j] -= \
-                                data[column][j]
-                        case CombinationOperation.MULTIPLY:
-                            data[self.key][j] *= \
-                                data[column][j]
-                        case CombinationOperation.DIVIDE:
-                            data[self.key][j] /= \
-                                data[column][j]
-                        case CombinationOperation.MODULO:
-                            data[self.key][j] %= \
-                                data[column][j]
-                        case CombinationOperation.INT_DIVIDE:
-                            data[self.key][j] //= \
-                                data[column][j]
-                        case other:
-                            raise ValueError(f"Invalid operation {other}.")
+                    try:
+                        match self.operation:
+                            case CombinationOperation.ADD:
+                                data[self.key][j] += \
+                                    data[column][j]
+                            case CombinationOperation.SUBTRACT:
+                                data[self.key][j] -= \
+                                    data[column][j]
+                            case CombinationOperation.MULTIPLY:
+                                data[self.key][j] *= \
+                                    data[column][j]
+                            case CombinationOperation.DIVIDE:
+                                data[self.key][j] /= \
+                                    data[column][j]
+                            case CombinationOperation.MODULO:
+                                data[self.key][j] %= \
+                                    data[column][j]
+                            case CombinationOperation.INT_DIVIDE:
+                                data[self.key][j] //= \
+                                    data[column][j]
+                            case other:
+                                raise ValueError(f"Invalid operation {other}.")
+                    except ZeroDivisionError:
+                        data[self.key][j] = None
             return data
 
     functions: List[CombinationFunction]
     overlay: Overlay
 
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 functions: List[CombinationFunction]):
+                 c_functions: List[CombinationFunction]):
         super().__init__(export_directory, identifier, context)
-        self.functions = functions
+        self.functions = c_functions
         simulationslist = [function.simulations for function in self.functions]
         sims = [sim.get_short_identifier() for sublist in simulationslist for sim in sublist]
         self.overlay = Overlay(export_directory, identifier, context, sims)
@@ -189,7 +192,7 @@ class CombinationFunctionList(Promptable):
             for column in simulation.get_column_names():
                 column_specifications.append(simulation.get_short_identifier() + "." + column)
         args: List[CLIArgument] = [
-            CLIArgument("function_specification_" + str(i + 1), Combination.CombinationFunction,
+            CLIArgument("c_function_specification_" + str(i + 1), Combination.CombinationFunction,
                         choices_provider=lambda _: column_specifications)
             for i in range(value)
         ]
@@ -199,5 +202,5 @@ class CombinationFunctionList(Promptable):
         Combination.CombinationFunction]:
         self.functions = []
         for i in range(values["function_count"]):
-            self.functions.append(values["function_specification_" + str(i + 1)])
+            self.functions.append(values["c_function_specification_" + str(i + 1)])
         return self.functions

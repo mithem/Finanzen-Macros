@@ -22,9 +22,11 @@ class CLIArgument(Generic[T]):
     key: str
     display_name: Optional[str]
     type: Type
+    type_name: str
     optional: bool
     default: Optional[T]
-    choices_provider: Optional[Callable]
+    default_frontend_value: str
+    choices_provider: Optional[Callable[[SimulationContext], List[str]]]
     additional_arg_provider: Optional[
         Callable[[SimulationContext, Optional[T]], List["CLIArgument"]]]
 
@@ -41,6 +43,9 @@ class CLIArgument(Generic[T]):
         self.display_name = display_name
         self.choices_provider = choices_provider
         self.additional_arg_provider = additional_arg_provider
+        self.calculate_default_frontend_value()
+        self.calculate_type_name()
+        CLIArgumentLibrary.register_argument(self)
 
     def __str__(self):
         return f"Argument('{self.key}', {self.type}, optional={self.optional})"
@@ -85,14 +90,36 @@ class CLIArgument(Generic[T]):
 
     def stringify(self, value: Optional[T]) -> str:
         """Returns a string representation of the value."""
+        if isinstance(value, date):
+            return value.isoformat()
         return str(value)
 
-    def load_value(self, context: SimulationContext) -> Tuple[Optional[T], List["CLIArgument"]]:
+    def load_value(self, context: SimulationContext,
+                   value_provider: Optional[Callable[[str, "CLIArgument"], str]] = None) -> Tuple[
+        Optional[T], List["CLIArgument"]]:
         """Prompt the user for the value of this argument and return it.
-        :param context: The simulation context."""
+        :param context: The simulation context.
+        :param value_provider: A function that prompts the user for a value and returns it."""
+
+        def f_value_provider(prompt: str, _: CLIArgument) -> str:
+            return input(prompt)
+
+        if value_provider is None:
+            value_provider = f_value_provider
         if issubclass(self.type, Promptable):
             type_ = self.type()
-            return type_.prompt(context), []
+            return type_.prompt(context, value_provider), []
+        prompt = self.get_user_prompt(context)
+        usr_input = value_provider(
+            prompt, self)
+        value = self.get_value(context, usr_input)
+        additional_args = self.additional_arg_provider(
+            context,
+            value
+        ) if self.additional_arg_provider else []
+        return value, additional_args
+
+    def get_user_prompt(self, context: SimulationContext) -> str:
         choices: Optional[List[str]] = self.choices_provider(
             context) if self.choices_provider else None
         if choices and self.optional:
@@ -106,14 +133,59 @@ class CLIArgument(Generic[T]):
             additional_brackets = " [default: " + self.stringify(self.default) + "]"
         else:
             additional_brackets = ""
-        usr_input = input(
-            f"{self.get_display_name()}{additional_brackets}: ")
-        value = self.get_value(context, usr_input)
-        additional_args = self.additional_arg_provider(
-            context,
-            value
-        ) if self.additional_arg_provider else []
-        return value, additional_args
+        return f"{self.get_display_name()}{additional_brackets}: "
+
+    def calculate_default_frontend_value(self):
+        """Calculates the default frontend value and saves it for the frontend."""
+        if self.default is None:
+            self.default_frontend_value = ""
+        else:
+            self.default_frontend_value = self.stringify(self.default)
+
+    def calculate_type_name(self):
+        """Calculates the type name and saves it for the frontend."""
+        match self.type:
+            case type if type == bool:
+                self.type_name = "bool"
+            case type if type == date:
+                self.type_name = "date"
+            case type if type == Float:
+                self.type_name = "float"
+            case type if issubclass(type, Parsable):
+                self.type_name = type.__name__
+            case type if type == str:
+                self.type_name = "string"
+            case type if issubclass(type, Promptable):
+                self.type_name = f"<Promptable type=\"{self.type.__name__}\"/>"
+            case type:
+                self.type_name = type.__name__
+
+    def __eq__(self, other):
+        return (
+                isinstance(other, CLIArgument)
+                and self.key == other.key
+                and self.type == other.type
+                and self.optional == other.optional
+                and self.default == other.default
+                and self.display_name == other.display_name
+        )
+
+
+class CLIArgumentLibrary:
+    _arguments: Dict[str, CLIArgument] = {}
+
+    @staticmethod
+    def register_argument(argument: CLIArgument):
+        """Registers an argument in the library."""
+        filtered = list(
+            filter(lambda arg: arg.key == argument.key, CLIArgumentLibrary._arguments.values()))
+        if filtered and filtered[0] != argument:
+            raise UserError(f"Argument with key '{argument.key}' already registered.")
+        CLIArgumentLibrary._arguments[argument.key] = argument
+
+    @staticmethod
+    def get_argument(key: str) -> CLIArgument:
+        return CLIArgumentLibrary._arguments[key]
 
 
 class Promptable(Generic[T]):
@@ -129,14 +201,16 @@ class Promptable(Generic[T]):
     def prepare_args(self, context: SimulationContext):
         """Prepare the arguments for the prompt."""
 
-    def prompt(self, context: SimulationContext) -> T:
+    def prompt(self, context: SimulationContext,
+               value_provider: Callable[[str, CLIArgument], str] = lambda prompt, _: input(
+                   prompt)) -> T:
         """Returns a dictionary of the arguments."""
         self.prepare_args(context)
         queue = self.args.copy()
         args: Dict[str, Any] = {}
         while queue:
             arg = queue.pop(0)
-            value, extra_args = arg.load_value(context)
+            value, extra_args = arg.load_value(context, value_provider)
             args[arg.key] = value
             queue.extend(extra_args)
 
@@ -179,16 +253,11 @@ class Float(Parsable):
         return float(input_str)
 
 
-def cli_arg_start_date():
-    """:return: CLI argument for the start date of a simulation."""
-    return CLIArgument("start_date", date, True, date.today(), "Start Date")
-
-
-def cli_arg_end_date(
-        additional_arg_provider: Optional[
-            Callable[[SimulationContext, Any], List[CLIArgument]]] = None):
+def cli_arg_end_date(prefix: str,
+                     additional_arg_provider: Optional[
+                         Callable[[SimulationContext, Any], List[CLIArgument]]] = None):
     """:return: CLI argument for the end date of a simulation."""
-    return CLIArgument("end_date", date, True, None, "End Date",
+    return CLIArgument(prefix + "_end_date", date, True, None, "End Date",
                        additional_arg_provider=additional_arg_provider)
 
 
@@ -211,22 +280,23 @@ class Config:
         from finance_macros.simulation.building_society_savings_contract import \
             BuildingSocietySavingsContract
         from finance_macros.simulation.real_estate import RealEstateSimulation
+        start_date = CLIArgument("start_date", date, True, date.today(), display_name="Start Date")
         self.investment = SimulationTypeConfig(
             "investment",
             "Investment",
             InvestmentSimulation,
             [
-                cli_arg_start_date(),
-                cli_arg_end_date(
-                    lambda _, value: (
-                        [CLIArgument(
-                            "target_capital",
-                            Float,
-                            display_name="Target Capital")] if value is None else [])
-                ),
-                CLIArgument("starting_capital", Float, display_name="Starting Capital"),
-                CLIArgument("monthly_investment", Float, display_name="Monthly Investment"),
-                CLIArgument("yearly_return", Float, display_name="Yearly Return"),
+                start_date,
+                cli_arg_end_date("i",
+                                 lambda _, value: (
+                                     [CLIArgument(
+                                         "i_target_capital",
+                                         Float,
+                                         display_name="Target Capital")] if value is None else [])
+                                 ),
+                CLIArgument("i_starting_capital", Float, display_name="Starting Capital"),
+                CLIArgument("i_monthly_investment", Float, display_name="Monthly Investment"),
+                CLIArgument("i_yearly_return", Float, display_name="Yearly Return"),
             ]
         )
         self.mortgage = SimulationTypeConfig(
@@ -234,13 +304,13 @@ class Config:
             "Mortgage",
             MortgageSimulation,
             [
-                cli_arg_start_date(),
-                cli_arg_end_date(),
-                CLIArgument("mortgage_sum", Float, False, None,
+                start_date,
+                cli_arg_end_date("m"),
+                CLIArgument("m_mortgage_sum", Float, False, None,
                             "Mortgage Sum"),
-                CLIArgument("downpayment_ratio", Float, True, .2, "Downpayment ratio"),
-                CLIArgument("interest_rate", Float, display_name="Interest rate"),
-                CLIArgument("monthly_payment", Float, display_name="Monthly payment"),
+                CLIArgument("m_downpayment_ratio", Float, True, .2, "Downpayment ratio"),
+                CLIArgument("m_interest_rate", Float, display_name="Interest rate"),
+                CLIArgument("m_monthly_payment", Float, display_name="Monthly payment"),
             ]
         )
         self.building_society_savings_contract = SimulationTypeConfig(
@@ -248,15 +318,15 @@ class Config:
             "Building Society Savings Contract",
             BuildingSocietySavingsContract,
             [
-                cli_arg_start_date(),
-                CLIArgument("contract_sum", Float, display_name="Contract sum"),
-                CLIArgument("starting_capital", Float, display_name="Starting capital"),
-                CLIArgument("savings_rate", Float, display_name="Savings rate"),
-                CLIArgument("savings_interest", Float, display_name="Savings interest"),
-                CLIArgument("mortgage_interest", Float, display_name="Mortgage interest"),
-                CLIArgument("mortgage_pay_rate", Float, optional=True,
+                start_date,
+                CLIArgument("bsc_contract_sum", Float, display_name="Contract sum"),
+                CLIArgument("bsc_starting_capital", Float, display_name="Starting capital"),
+                CLIArgument("bsc_savings_rate", Float, display_name="Savings rate"),
+                CLIArgument("bsc_savings_interest", Float, display_name="Savings interest"),
+                CLIArgument("bsc_mortgage_interest", Float, display_name="Mortgage interest"),
+                CLIArgument("bsc_mortgage_pay_rate", Float, optional=True,
                             display_name="Mortgage pay rate"),
-                CLIArgument("mortgage_downpayment_ratio", Float, False, .2, "Downpayment ratio")
+                CLIArgument("bsc_mortgage_downpayment_ratio", Float, False, .2, "Downpayment ratio")
             ]
         )
         self.overlay = SimulationTypeConfig(
@@ -264,7 +334,7 @@ class Config:
             "Overlay",
             Overlay,
             [
-                CLIArgument("simulations", list, display_name="Simulations",
+                CLIArgument("o_simulations", list, display_name="Simulations",
                             choices_provider=lambda context: context.get_short_identifiers())
             ]
         )
@@ -273,7 +343,7 @@ class Config:
             "Combination",
             Combination,
             [
-                CLIArgument("functions", CombinationFunctionList, display_name="Functions",
+                CLIArgument("c_functions", CombinationFunctionList, display_name="Functions",
                             additional_arg_provider=CombinationFunctionList.additional_arg_provider)
             ]
         )
@@ -282,15 +352,14 @@ class Config:
             "Real Estate",
             RealEstateSimulation,
             [
-                cli_arg_start_date(),
-                CLIArgument("buy_price", Float, display_name="Buy price"),
-                CLIArgument("cash_available", Float, display_name="Cash available"),
-                CLIArgument("inflation", Float, display_name="Inflation"),
-                CLIArgument("pay_rate", Float, display_name="Pay rate"),
-                CLIArgument("rent", Float, display_name="Rent"),
-                CLIArgument("investment_return", Float, display_name="Investment return"),
-                CLIArgument("mortgage_interest", Float, display_name="Mortgage interest"),
-                CLIArgument("target_downpayment", Float, display_name="Target downpayment")
+                start_date,
+                CLIArgument("re_buy_price", Float, display_name="Buy price"),
+                CLIArgument("re_cash_available", Float, display_name="Cash available"),
+                CLIArgument("re_pay_rate", Float, display_name="Pay rate"),
+                CLIArgument("re_rent", Float, display_name="Rent"),
+                CLIArgument("re_investment_return", Float, display_name="Investment return"),
+                CLIArgument("re_mortgage_interest", Float, display_name="Mortgage interest"),
+                CLIArgument("re_target_downpayment", Float, display_name="Target downpayment")
             ]
         )
 

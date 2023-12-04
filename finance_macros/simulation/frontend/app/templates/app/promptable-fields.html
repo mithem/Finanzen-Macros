@@ -1,0 +1,68 @@
+{% load fm_filters %}
+<script>
+    function toggleDateInput(key, default_value) {
+        var input = document.getElementsByName(key)[0];
+        var toggler = document.getElementsByName(key + "_toggle")[0];
+        if (toggler.checked) {
+            input.disabled = false;
+            input.value = default_value;
+        } else {
+            input.disabled = true;
+        }
+    }
+</script>
+{% for arg in args %}
+    <label>
+        <span {% if not arg.optional %}class="required"{% endif %}>{{ arg|get_user_prompt:simulation_context }}</span>
+        {% if arg.type_name == "float" %}
+            <input
+                    type="number"
+                    {% if not arg.optional %}required{% endif %}
+                    name="{{ arg.key }}"
+                    step="any"
+                    value="{{ arg.default_frontend_value }}"/>
+            </label><br/>
+        {% elif arg.type_name == "bool" %}
+            <input
+                    type="checkbox"
+                    {% if not arg.optional %}required{% endif %}
+                    name="{{ arg.key }}"
+                    {% if arg.default %}checked{% endif %}
+            />
+            </label><br/>
+            {% comment %}
+        {% elif arg.type_name == "date" %}
+            {% if arg.optional %}
+                <input
+                        type="checkbox"
+                        name="{{ arg.key }}_toggle"
+                        onClick="toggleDateInput('{{ arg.key }}', '{{ arg.default_frontend_value }}')"
+                />
+            {% endif %}
+            <input
+                    type="date"
+                    {% if not arg.optional %}required{% endif %}
+                    name="{{ arg.key }}"
+                    {% if arg.optional %}
+                    value="{{ arg.default_frontend_value }}"
+                    {% endif %}
+                    {% if arg.optional %}disabled{% endif %}
+            />
+            </label><br/>
+        {% endcomment %}
+        {% else %}
+            {% with type=arg.type_name|match_promptable %}
+                {% if type is not None %}
+                    </label><br/>
+                    {% include 'app/promptable-fields.html' with args=type|get_promptable_args %}
+                {% else %}
+                    <input
+                            type="text"
+                            {% if not arg.optional %}required{% endif %}
+                            name="{{ arg.key }}"
+                            value="{{ arg.default_frontend_value }}"/>
+                    </label><br/>
+                {% endif %}
+            {% endwith %}
+        {% endif %}
+{% endfor %}

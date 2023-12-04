@@ -1,6 +1,7 @@
 """Dash server for visualizing simulation results."""
 import os
 import re
+from typing import Dict
 
 import pandas as pd
 from dash import Dash, dcc, html
@@ -16,7 +17,8 @@ app.title = "Finance Simulation"
 
 def run(export_directory: str):
     """Run the server."""
-    app.layout = get_layout(export_directory)
+    data = load_data(export_directory)
+    app.layout = get_layout(data)
     app.run_server()
 
 
@@ -40,16 +42,14 @@ def mg(fig):
     return dcc.Graph(figure=fig)
 
 
-def get_layout(export_directory: str) -> html:
+def get_layout(data: Dict[str, pd.DataFrame]) -> html:
     """Get the layout for the server."""
-    data = load_data(export_directory)
     tabs = []
     for sim, simdata in data.items():
         tabs.append(dcc.Tab(label=sim, children=[
             mg(graphs.get_table(simdata)),
             mg(graphs.get_line_plot(simdata)),
         ]))
-
     return html.Div([
         html.H1("Finance Simulation"),
         dcc.Tabs(tabs)

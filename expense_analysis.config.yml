@@ -1,0 +1,2 @@
+import_file_regex:
+  - Umsatzanzeige.*\.csv$

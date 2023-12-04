@@ -2,9 +2,9 @@
 import datetime
 import os
 
-HEADER_ROW = 100
-DATE_COLUMN = 9
-PORTFOLIO_FIRST_ROW = 32
+HEADER_ROW = 7
+DATE_COLUMN = 29
+PORTFOLIO_FIRST_ROW = 8
 PORTFOLIO_IDENTIFIER_COLUMN = 3
 PORTFOLIO_SHARE_COUNT_COLUMN = 8
 
@@ -14,8 +14,8 @@ try:
     # pylint: disable=undefined-variable
     desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
     model = desktop.getCurrentComponent()
-    sheet = model.getSheets().getByName("Sparen")
-    EXPORT_DIRECTORY = sheet.getCellByPosition(8, 11).getString()
+    sheet = model.getSheets().getByName("Portfolio")
+    EXPORT_DIRECTORY = sheet.getCellByPosition(30, 5).getString()
 except NameError:  # running tests
     EXPORT_DIRECTORY = "~/"
 
@@ -66,7 +66,8 @@ def write_csv(*args):  # pylint: disable=unused-argument
         while date:
             file.write(date)
             for i in range(len(positions)):
-                file.write(";" + str(sheet.getCellByPosition(DATE_COLUMN + i + 1, row).getValue()))
+                file.write(
+                    ";" + str(sheet.getCellByPosition(DATE_COLUMN + i + 1, row).getValue()))
             file.write("\n")
             row += 1
             date = sheet.getCellByPosition(DATE_COLUMN, row).getString()
@@ -77,7 +78,7 @@ def _get_share_count(position: str) -> float:
     value = sheet.getCellByPosition(PORTFOLIO_IDENTIFIER_COLUMN,
                                     PORTFOLIO_FIRST_ROW + i).getString()
     while value:
-        if value == position:
+        if value in position or position in value:
             return sheet.getCellByPosition(PORTFOLIO_SHARE_COUNT_COLUMN,
                                            PORTFOLIO_FIRST_ROW + i).getValue()
         i += 1

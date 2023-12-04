@@ -12,13 +12,14 @@ class Overlay(Simulation):
     simulations: List[Simulation]
 
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
-                 simulations: Union[List[str], List[Simulation]]):
-        super().__init__(export_directory, identifier, context)
+                 o_simulations: Union[List[str], List[Simulation]],
+                 automatic_identifier_counting: bool = True):
+        super().__init__(export_directory, identifier, context, automatic_identifier_counting)
         sims: List[Simulation] = []
-        if isinstance(simulations[0], str):
-            sims = context.get_simulations_with_ids(*simulations)
-        elif isinstance(simulations[0], Simulation):
-            sims = simulations  # type: ignore
+        if isinstance(o_simulations[0], str):
+            sims = context.get_simulations_with_ids(*o_simulations)
+        elif isinstance(o_simulations[0], Simulation):
+            sims = o_simulations  # type: ignore
         self.simulations = sims
 
     def simulate(self):
@@ -29,6 +30,8 @@ class Overlay(Simulation):
         tmp = {}
         for simulation in self.simulations:
             tmp[simulation.get_short_identifier()] = simulation.get_results()
+        if len(tmp) == 0:
+            raise ValueError("No simulations to overlay.")
         results = {}
         start_date = min(
             map(lambda sim: sim["date"][0], tmp.values()))
@@ -46,5 +49,4 @@ class Overlay(Simulation):
         return results
 
     def get_column_names(self) -> List[str]:
-        nameslist = [sim.get_column_names() for sim in self.simulations]
-        return [col for sublist in nameslist for col in sublist]
+        return [col for sim in self.simulations for col in sim.get_column_names()]

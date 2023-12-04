@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Finance Macros</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block scripts %}{% endblock scripts %}
+    {% block styles %}{% endblock styles %}
+</head>
+<body>
+<nav>
+    <a href="{% url 'index' %}">Home</a>
+    <div class="dropdown">
+        <button class="dropbtn">Simulation
+            <i class="fa fa-caret-down"></i>
+        </button>
+        <div class="dropdown-content">
+            {% for simulation_type in simulation_types %}
+                <a href="{% url 'simulation-view' %}?simulation_type={{ simulation_type.key }}">{{ simulation_type.display_name }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    <a href="{% url 'reset-context' %}?redirect_url={{ request.get_full_path }}">Reset</a>
+</nav>
+<div class="content">
+    {% block content %}
+    {% endblock content %}
+</div>
+</body>
+</html>
