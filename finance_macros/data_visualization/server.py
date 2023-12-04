@@ -135,7 +135,7 @@ def net_worth_position_type_treemap():
 
 def net_worth_position_group_pie():
     """Get a pie plot of the net worth composition by position group."""
-    return mg(graphs.get_net_worth_position_group_pie(portfolio_composition))
+    return mg(graphs.get_net_worth_group_to_pos_type_sunburst(portfolio_composition))
 
 
 def net_worth_position_summary_sunburst():
@@ -146,6 +146,36 @@ def net_worth_position_summary_sunburst():
 def net_worth_position_summary_treemap():
     """Get a treemap plot of the net worth composition by position type."""
     return mg(graphs.get_net_worth_position_summary_treemap(portfolio_composition))
+
+
+def net_worth_group_to_positions_sunburst():
+    """Get a sunburst plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_group_to_positions_sunburst(portfolio_composition))
+
+
+def net_worth_group_to_positions_treemap():
+    """Get a treemap plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_group_to_positions_treemap(portfolio_composition))
+
+
+def net_worth_group_to_pos_type_sunburst():
+    """Get a sunburst plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_group_to_pos_type_sunburst(portfolio_composition))
+
+
+def net_worth_group_to_pos_type_treemap():
+    """Get a treemap plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_group_to_pos_type_treemap(portfolio_composition))
+
+
+def net_worth_pos_type_to_group_sunburst():
+    """Get a sunburst plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_pos_type_to_group_sunburst(portfolio_composition))
+
+
+def net_worth_pos_type_to_group_treemap():
+    """Get a treemap plot of the net worth composition by position type."""
+    return mg(graphs.get_net_worth_pos_type_to_group_treemap(portfolio_composition))
 
 
 css_flex_row = {"display": "flex", "flex-direction": "row"}
@@ -176,11 +206,24 @@ app.layout = html.Div([
                 depot_composition_by_shares()
             ], style=css_flex_row)
         ]),
-        dcc.Tab(label="Group pie", children=[
+        dcc.Tab(label="Positions by group", children=[
             html.Div([
-                net_worth_position_group_pie()
+                net_worth_group_to_positions_sunburst(),
+                net_worth_group_to_positions_treemap()
             ], style=css_flex_row)
         ]),
+        dcc.Tab(label="Position types by group", children=[
+            html.Div([
+                net_worth_group_to_pos_type_sunburst(),
+                net_worth_group_to_pos_type_treemap()
+            ], style=css_flex_row)
+        ]),
+        dcc.Tab(label="Position groups by type", children=[
+            html.Div([
+                net_worth_pos_type_to_group_sunburst(),
+                net_worth_pos_type_to_group_treemap()
+            ])
+        ], style=css_flex_row)
     ]),
     fortune_history_area(),
     fortune_history_line(),
