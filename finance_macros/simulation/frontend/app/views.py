@@ -1,3 +1,4 @@
+"""Django views."""
 import json
 import urllib
 import urllib.parse
@@ -23,6 +24,7 @@ CONTEXT = SimulationContext()
 
 
 def insert_into_iframe(html):
+    """Inserts the HTML code inside an iframe returned as html code"""
     return "<iframe srcdoc='" + html + "'></iframe>"
 
 
@@ -45,6 +47,7 @@ def get_cli_arg_types_for_context() -> Dict:
 
 # Create your views here.
 def index(request):
+    """The start page."""
     context = {
         "simulation_types": ALL_SIMULATION_TYPES,
     }
@@ -52,11 +55,13 @@ def index(request):
 
 
 def export_viewer(request):
+    """The export viewer page."""
     # return HttpResponse("Type: " + escape(str(type(data))))
     return render(request, "app/export_viewer.html", {"export_data": {}})
 
 
 def simulation_view(request):
+    """The page that shows the simulation view."""
     sim_type = request.GET.get("simulation_type", None)
     try:
         simulation_type = CONFIG.get_simulation_type(sim_type)
@@ -71,27 +76,30 @@ def simulation_view(request):
             "simulation_context": CONTEXT
         }
         return render(request, "app/simulation-view.html", context)
-    except core.UserError:
-        raise BadRequest(f"Invalid simulation type '{sim_type}'.")
+    except core.UserError as exc:
+        raise BadRequest(f"Invalid simulation type '{sim_type}'.") from exc
 
 
 def additional_args(request):
+    """"Return to the frontend whether there are additional arguments that
+    need to be entered by the user."""
     args_data = json.loads(urllib.parse.unquote(request.GET.get("args", "[]")))
     entered_args = list(map(lambda arg: (CLIArgumentLibrary.get_argument(arg["key"]), arg["value"]),
                             args_data))
-    additional_args = []
+    additional_arguments = []
     for arg, value in entered_args:
         if arg.additional_arg_provider:
             value, add_args = arg.load_value(CONTEXT, lambda _, __: value)
             if add_args:
-                additional_args.extend(add_args)
+                additional_arguments.extend(add_args)
 
     arg_dicts = list(map(lambda arg: {"key": arg.key, "display_name": arg.display_name,
-                                      "type": arg.type_name}, additional_args))
+                                      "type": arg.type_name}, additional_arguments))
     return JsonResponse({"additional_args": arg_dicts})
 
 
 def simulate(request):
+    """The endpoint to run and save a simulation"""
     arguments = map(lambda arg: (CLIArgumentLibrary.get_argument(arg["key"]), arg["value"]),
                     json.loads(urllib.parse.unquote(request.GET.get("args", "[]"))))
     args = {
@@ -109,42 +117,44 @@ def simulate(request):
     return JsonResponse({"success": True, "identifier": sim.identifier})
 
 
-def load_simulation_data(data: Dict, identifier: str) -> pd.DataFrame:
+def load_simulation_data(sim_data: Dict, identifier: str) -> pd.DataFrame:
+    """Load simulation data and return it as a dataframe"""
     try:
-        return data[identifier]
-    except KeyError:
+        return sim_data[identifier]
+    except KeyError as exc:
         short_id = Simulation.make_short_identifier(identifier)
-        for key, dataframe in data.items():
+        for key, dataframe in sim_data.items():
             if Simulation.make_short_identifier(key) == short_id:
                 return dataframe
-        raise FileNotFoundError(f"Simulation with identifier '{identifier}' not found.")
+        raise FileNotFoundError(f"Simulation with identifier '{identifier}' not found.") from exc
 
 
 def get_simulation_results(request):
+    """Get the results of a simulation."""
     identifier = request.GET.get("identifier", None)
     if identifier is None:
         raise BadRequest("No identifier specified")
     export_dir = request.GET.get("export_dir", "/Users/miguel/Desktop")
-    data = load_simulation_data(export_viewer_module.load_data(export_dir), identifier)
+    sim_data = load_simulation_data(export_viewer_module.load_data(export_dir), identifier)
     line_data = []
-    for col in data.columns:
+    for col in sim_data.columns:
         if col == "date":
             continue
         line_data.append(
             {
                 "name": col,
-                "x": data["date"].tolist(),
-                "y": data[col].tolist(),
+                "x": sim_data["date"].tolist(),
+                "y": sim_data[col].tolist(),
                 "type": "line"
             }
         )
     table_data = [{
         "type": "table",
         "header": {
-            "values": data.columns.tolist(),
+            "values": sim_data.columns.tolist(),
         },
         "cells": {
-            "values": [data[col].tolist() for col in data.columns]
+            "values": [sim_data[col].tolist() for col in sim_data.columns]
         }
     }]
     res = JsonResponse({
@@ -159,6 +169,7 @@ def get_simulation_results(request):
 
 
 def reset_context(request):
+    """Reset the context of already run simulations"""
     CONTEXT.reset()
     main.delete_existing("/Users/miguel/Desktop")
     url = request.GET.get("redirect_url", "index")

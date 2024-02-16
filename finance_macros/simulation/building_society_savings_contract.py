@@ -39,7 +39,8 @@ class BuildingSocietySavingsContract(TimeSeriesSimulation):
         self.starting_capital = bsc_starting_capital
         self.savings_rate = bsc_savings_rate
         self.savings_interest = bsc_savings_interest
-        self.mortgage_pay_rate = bsc_mortgage_pay_rate if bsc_mortgage_pay_rate else bsc_savings_rate
+        self.mortgage_pay_rate = bsc_mortgage_pay_rate if (
+            bsc_mortgage_pay_rate) else bsc_savings_rate
         self.mortgage_interest = bsc_mortgage_interest
         self.mortgage_downpayment_ratio = bsc_mortgage_downpayment_ratio
         self.contract_sum = bsc_contract_sum

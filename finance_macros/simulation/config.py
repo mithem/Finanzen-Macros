@@ -16,6 +16,7 @@ class Parsable(Generic[T]):
         raise NotImplementedError()
 
 
+# pylint: disable=too-many-instance-attributes
 class CLIArgument(Generic[T]):
     """A CLI argument. Used to generically define the arguments the CLI interface asks the user
     to fill in parameters for simulations."""
@@ -120,6 +121,7 @@ class CLIArgument(Generic[T]):
         return value, additional_args
 
     def get_user_prompt(self, context: SimulationContext) -> str:
+        """Return the string to prompt the user with."""
         choices: Optional[List[str]] = self.choices_provider(
             context) if self.choices_provider else None
         if choices and self.optional:
@@ -145,20 +147,20 @@ class CLIArgument(Generic[T]):
     def calculate_type_name(self):
         """Calculates the type name and saves it for the frontend."""
         match self.type:
-            case type if type == bool:
+            case type_ if type_ == bool:
                 self.type_name = "bool"
-            case type if type == date:
+            case type_ if type_ == date:
                 self.type_name = "date"
-            case type if type == Float:
+            case type_ if type_ == Float:
                 self.type_name = "float"
-            case type if issubclass(type, Parsable):
-                self.type_name = type.__name__
-            case type if type == str:
+            case type_ if issubclass(type_, Parsable):
+                self.type_name = type_.__name__
+            case type_ if type_ == str:
                 self.type_name = "string"
-            case type if issubclass(type, Promptable):
+            case type_ if issubclass(type_, Promptable):
                 self.type_name = f"<Promptable type=\"{self.type.__name__}\"/>"
-            case type:
-                self.type_name = type.__name__
+            case type_:
+                self.type_name = type_.__name__
 
     def __eq__(self, other):
         return (
@@ -172,6 +174,7 @@ class CLIArgument(Generic[T]):
 
 
 class CLIArgumentLibrary:
+    """The library of supported CLI arguments."""
     _arguments: Dict[str, CLIArgument] = {}
 
     @staticmethod
@@ -185,6 +188,7 @@ class CLIArgumentLibrary:
 
     @staticmethod
     def get_argument(key: str) -> CLIArgument:
+        """Returns the argument with the specified key."""
         return CLIArgumentLibrary._arguments[key]
 
 

@@ -42,6 +42,7 @@ class MortgageSimulation(TimeSeriesSimulation):
         self.reset_data()
 
     def reset_data(self):
+        """Reset all properties."""
         self.reset_time_series_data()
         self.borrowed_amount = self.mortgage_sum * (1 - self.downpayment_ratio)
         self.downpayment = self.mortgage_sum * self.downpayment_ratio

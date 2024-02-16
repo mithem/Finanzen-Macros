@@ -269,8 +269,8 @@ def get_stock_quote_line(quote_history: pd.DataFrame) -> go.Figure:
     return px.line(quote_history, x=DATE_COLUMN, y=quote_history.keys()[1:], title="Quotes")
 
 
-def _get_parent_name_from_type(type: PositionType) -> str:
-    parent = PositionType.get_parent(type)
+def _get_parent_name_from_type(from_type: PositionType) -> str:
+    parent = PositionType.get_parent(from_type)
     return parent.value if parent else ""
 
 
@@ -292,6 +292,7 @@ def _get_net_worth_position_type_hierarchical_map(portfolio: PortfolioCompositio
 
 
 def get_net_worth_position_type_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position type sunburst."""
     data = {
         **_get_net_worth_position_type_hierarchical_map(portfolio),
         "branchvalues": "total"
@@ -301,12 +302,13 @@ def get_net_worth_position_type_sunburst(portfolio: PortfolioComposition) -> go.
 
 
 def get_net_worth_position_type_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position type treemap."""
     data = _get_net_worth_position_type_hierarchical_map(portfolio)
     return go.Figure(go.Treemap(**data), layout_title_text="Net worth composition by position type")
 
 
 def _get_net_worth_position_summary_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
-    str, List[str | float]]:
+    str, List[str] | List[float]]:
     labels = []
     parents = []
     values = []
@@ -320,21 +322,20 @@ def _get_net_worth_position_summary_hierarchical_map(portfolio: PortfolioComposi
     # position types
     data = portfolio.get_position_type_value_composition()
     pos_types = data.keys()
-    for type in pos_types:
-        labels.append(type.value)
-        parents.append(_get_parent_name_from_type(type))
-        values.append(data[type])
+    for type_ in pos_types:
+        labels.append(type_.value)
+        parents.append(_get_parent_name_from_type(type_))
+        values.append(data[type_])
 
-    data = {
+    return {
         "labels": labels,
         "parents": parents,
         "values": values
     }
-    return data
 
 
 def _get_net_worth_group_to_positions_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
-    str, List[str | float]]:
+    str, List[str] | List[float]]:
     labels = []
     parents = []
     values = []
@@ -359,16 +360,15 @@ def _get_net_worth_group_to_positions_hierarchical_map(portfolio: PortfolioCompo
     parents.append("")
     values.append(net_worth)
 
-    data = {
+    return {
         "labels": labels,
         "parents": parents,
         "values": values
     }
-    return data
 
 
 def _get_net_worth_group_to_pos_type_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
-    str, List[str | float]]:
+    str, List[str] | List[float]]:
     labels = []
     parents = []
     values = []
@@ -380,10 +380,13 @@ def _get_net_worth_group_to_pos_type_hierarchical_map(portfolio: PortfolioCompos
         labels.append(group_name)
         parents.append(all_groups_name)
         values.append(value)
-        for type in PositionType.get_all_types():
-            sum_of_type_in_group = sum(position.value for position in
-                                       filter(lambda pos: pos.type == type and pos.group == group, portfolio.positions))
-            labels.append(type.name + "-" + group_name)
+        for type_ in PositionType.get_all_types():
+            sum_of_type_in_group = sum(
+                position.value for position in filter(
+                    lambda pos: pos.type == type_ and pos.group == group, portfolio.positions
+                )
+            )
+            labels.append(type_.name + "-" + group_name)
             parents.append(group_name)
             values.append(sum_of_type_in_group)
 
@@ -391,46 +394,51 @@ def _get_net_worth_group_to_pos_type_hierarchical_map(portfolio: PortfolioCompos
     parents.append("")
     values.append(sum(group_data.values()))
 
-    data = {
+    return {
         "labels": labels,
         "parents": parents,
         "values": values
     }
-    return data
 
 
 def _get_net_worth_pos_type_to_group_hierarchical_map(portfolio: PortfolioComposition) -> Dict[
-    str, List[str | float]]:
+    str, List[str] | List[float]]:
     labels = []
     parents = []
     values = []
     group_data = portfolio.get_group_value_composition()
 
-    for type in PositionType.get_all_types():
-        labels.append(type.name)
+    for type_ in PositionType.get_all_types():
+        labels.append(type_.name)
         parents.append(PositionType.POSITION_TYPE.name)
         values.append(sum(position.value for position in
-                          filter(lambda pos: pos.type == type, portfolio.positions)))
-        for group, value in group_data.items():
+                          filter(lambda pos: pos.type == type_, portfolio.positions)))
+        for group in group_data.keys():
             group_name = _get_name_from_group(group)
-            labels.append(group_name + "-" + type.name)
-            parents.append(type.name)
-            values.append(sum(position.value for position in
-                              filter(lambda pos: pos.type == type and pos.group == group, portfolio.positions)))
+            labels.append(group_name + "-" + type_.name)
+            parents.append(type_.name)
+            values.append(
+                sum(
+                    position.value for position in filter(
+                        lambda pos: pos.type == type_ and pos.group == group,
+                        portfolio.positions
+                    )
+                )
+            )
 
     labels.append(PositionType.POSITION_TYPE.name)
     parents.append("")
     values.append(sum(group_data.values()))
 
-    data = {
+    return {
         "labels": labels,
         "parents": parents,
         "values": values
     }
-    return data
 
 
 def get_net_worth_position_summary_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position summary sunburst."""
     data = {
         **_get_net_worth_position_summary_hierarchical_map(portfolio),
         "branchvalues": "total"
@@ -440,11 +448,13 @@ def get_net_worth_position_summary_sunburst(portfolio: PortfolioComposition) -> 
 
 
 def get_net_worth_position_summary_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position summary treemap."""
     data = _get_net_worth_position_summary_hierarchical_map(portfolio)
     return go.Figure(go.Treemap(**data), layout_title_text="Position summary")
 
 
 def get_net_worth_group_to_positions_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth group to positions sunburst."""
     data = {
         **_get_net_worth_group_to_positions_hierarchical_map(portfolio),
         "branchvalues": "total"
@@ -454,12 +464,14 @@ def get_net_worth_group_to_positions_sunburst(portfolio: PortfolioComposition) -
 
 
 def get_net_worth_group_to_positions_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth group to positions treemap."""
     data = _get_net_worth_group_to_positions_hierarchical_map(portfolio)
     return go.Figure(go.Treemap(**data), layout_title_text="Positions by position group",
                      layout_height=700)
 
 
 def get_net_worth_group_to_pos_type_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth group to position type sunburst."""
     data = {
         **_get_net_worth_group_to_pos_type_hierarchical_map(portfolio),
         "branchvalues": "total"
@@ -469,12 +481,14 @@ def get_net_worth_group_to_pos_type_sunburst(portfolio: PortfolioComposition) ->
 
 
 def get_net_worth_group_to_pos_type_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth group to position type treemap."""
     data = _get_net_worth_group_to_pos_type_hierarchical_map(portfolio)
     return go.Figure(go.Treemap(**data), layout_title_text="Position types by position group",
                      layout_height=700)
 
 
 def get_net_worth_pos_type_to_group_sunburst(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position type to position group sunburst."""
     data = {
         **_get_net_worth_pos_type_to_group_hierarchical_map(portfolio),
         "branchvalues": "total"
@@ -484,6 +498,7 @@ def get_net_worth_pos_type_to_group_sunburst(portfolio: PortfolioComposition) ->
 
 
 def get_net_worth_pos_type_to_group_treemap(portfolio: PortfolioComposition) -> go.Figure:
+    """Get net worth position type to position group treemap."""
     data = _get_net_worth_pos_type_to_group_hierarchical_map(portfolio)
     return go.Figure(go.Treemap(**data), layout_title_text="Position groups by position type",
                      layout_height=700)

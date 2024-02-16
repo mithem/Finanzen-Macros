@@ -25,7 +25,8 @@ class InvestmentSimulation(TimeSeriesSimulation):
                  i_monthly_investment: float, i_yearly_return: float,
                  i_target_capital: Optional[float] = None,
                  automatic_identifier_counting: bool = True):
-        assert i_end_date or i_target_capital, "Either end_date or target_capital must be specified."
+        assert i_end_date or i_target_capital, "Either end_date or target_capital \
+        must be specified."
         self.starting_capital = i_starting_capital
         self.target_capital = i_target_capital
         self.monthly_investment = i_monthly_investment
