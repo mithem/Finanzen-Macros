@@ -1,16 +1,20 @@
 """Utilities for calculating the required stock acquisitions to match a target portfolio."""
+# pylint: disable=unused-argument
 import enum
 import os
 from typing import List, Union, Dict, Optional, Tuple
 
+import pandas as pd
+
 
 # Man, it sucks that you can't use external pip package with LibreOffice's Python interpreter :/
 class TreeNode:
+    """A node of an abstract tree structure."""
     position_type: "PositionType"
     parent: Optional["TreeNode"]
     children: List["TreeNode"]
 
-    def __init__(self, position_type: "PositionType", children: List["TreeNode"] = None,
+    def __init__(self, position_type: "PositionType", children: Optional[List["TreeNode"]] = None,
                  parent: Optional["TreeNode"] = None):
         self.position_type = position_type
         self.children = children if children is not None else []
@@ -22,6 +26,7 @@ class TreeNode:
         return f"TreeNode({self.position_type.value}, {self.children})"
 
     def find(self, position_type: "PositionType") -> Optional["TreeNode"]:
+        """Find a node with a given position type."""
         if self.position_type == position_type:
             return self
         for child in self.children:
@@ -32,6 +37,7 @@ class TreeNode:
 
     @property
     def descendents(self) -> List["TreeNode"]:
+        """The list of descendents of this node (children and children's descendants)."""
         return self.children + [descendent for child in self.children for descendent in
                                 child.descendents]
 
@@ -57,28 +63,23 @@ class PositionType(enum.Enum):
 
     @staticmethod
     def get_type_tree() -> TreeNode:
-        def node(name: str, children: [TreeNode] = None) -> TreeNode:
+        """Return the tree of all position types."""
+
+        def node(name: str, children: Optional[List[TreeNode]] = None) -> TreeNode:
             return TreeNode(PositionType(name), children=children)
 
-        stock = node("Stock", children=[
-            node("Index Fund"),
-            node("Individual Stock")
-        ])
-        bond = node("Bond", children=[
-            node("Government Bond"),
-            node("Corporate Bond")
-        ])
-        immediately_available = node("Immediately Available", children=[
-            node("Checking Account"),
-            node("Savings Account"),
-            node("Cash")
-        ])
+        stock = node("Stock", children=[node("Index Fund"), node("Individual Stock")])
+        bond = node("Bond", children=[node("Government Bond"), node("Corporate Bond")])
+        immediately_available = node("Immediately Available",
+                                     children=[node("Checking Account"), node("Savings Account"),
+                                               node("Cash")])
         fixed_deposit = node("Fixed Deposit")
         real_estate = node("Real Estate")
         children = [stock, bond, immediately_available, fixed_deposit, real_estate]
         return node("Position Type", children)
 
     def get_contained_types(self) -> List["PositionType"]:
+        """Get all position types that are contained in this type."""
         tree = PositionType.get_type_tree()
         type_node = tree.find(self)
         assert type_node is not None
@@ -86,6 +87,7 @@ class PositionType(enum.Enum):
 
     @staticmethod
     def get_all_types() -> List["PositionType"]:
+        """Get all position types."""
         return [PositionType.STOCK, PositionType.INDEX_FUND, PositionType.INDIVIDUAL_STOCK,
                 PositionType.BOND, PositionType.GOVERNMENT_BOND, PositionType.CORPORATE_BOND,
                 PositionType.IMMEDIATELY_AVAILABLE, PositionType.CHECKING_ACCOUNT,
@@ -93,14 +95,14 @@ class PositionType(enum.Enum):
                 PositionType.REAL_ESTATE]
 
     def is_contained_in(self, other: "PositionType") -> bool:
-        """Check if this position type is contained in another one."""
+        """Check if this position type is contained in `other`"""
         return self in other.get_contained_types()
 
     @staticmethod
-    def get_parent(type: "PositionType") -> Optional["PositionType"]:
+    def get_parent(of_type: "PositionType") -> Optional["PositionType"]:
         """Get the parent type of the given type."""
         tree = PositionType.get_type_tree()
-        node = tree.find(type)
+        node = tree.find(of_type)
         return node.parent.position_type if node and node.parent else None
 
 
@@ -112,49 +114,29 @@ try:
 
     PORTFOLIO_SUMMARY_COLUMN = 0
     PORTFOLIO_SUMMARY_ROW_START = 28
-    PORTFOLIO_SUMMARY_POSITION_TYPES = [
-        PositionType.STOCK,
-        PositionType.INDEX_FUND,
-        PositionType.IMMEDIATELY_AVAILABLE,
-        PositionType.FIXED_DEPOSIT,
-        PositionType.CASH
-    ]
+    PORTFOLIO_SUMMARY_POSITION_TYPES = [PositionType.STOCK, PositionType.INDEX_FUND,
+                                        PositionType.IMMEDIATELY_AVAILABLE,
+                                        PositionType.FIXED_DEPOSIT, PositionType.CASH]
 
     PORTFOLIO_TABLE_ROW_START = 8
-    PORTFOLIO_TABLE_COLUMNS = {
-        "name": 0,
-        "value": 11,
-        "type": 13,
-        "target_proportion_in_category": 15,
-        "group": 16
-    }
+    PORTFOLIO_TABLE_COLUMNS = {"name": 0, "value": 11, "type": 13,
+                               "target_proportion_in_category": 15, "group": 16}
 
     PORTFOLIO_COMPOSITION_TARGET_TYPES_ROW_START = 8
-    PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS = {
-        "name": 16,
-        "percentage": 17
-    }
+    PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS = {"name": 16, "percentage": 17}
 
     PORTFOLIO_COMPOSITION_TARGET_GROUPS_ROW_START = 20
 
     PORTFOLIO_ACQUISITION_RECOMMENDATIONS_BUDGET_CELL = sheet.getCellByPosition(17, 32)
     PORTFOLIO_ACQUISITION_RECOMMENDATIONS_ROW_START = 37
-    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_COLUMNS = {
-        "type": 16,
-        "name": 17,
-        "value": 18
-    }
+    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_COLUMNS = {"type": 16, "name": 17, "value": 18}
 
     PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_ROW_START = 37
-    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS = {
-        "type": 20,
-        "name": 21,
-        "value": 22,
-        "group": 23,
-        "summary": 25
-    }
+    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS = {"type": 20, "name": 21,
+                                                                         "value": 22, "group": 23,
+                                                                         "summary": 25}
 except NameError:  # running tests
-    import pandas as pd
+    pass
 
 
 class PositionGroup:
@@ -162,11 +144,13 @@ class PositionGroup:
     name: str
 
     @staticmethod
-    def DEFAULT() -> "PositionGroup":
+    def DEFAULT() -> "PositionGroup":  # pylint: disable=invalid-name
+        """Default position group."""
         return PositionGroup("Default")
 
     @property
     def display_value(self) -> str:
+        """The display value of the position group (human-readable)."""
         return self.name if self != PositionGroup.DEFAULT() else ""
 
     def __init__(self, name: str):
@@ -189,6 +173,7 @@ class Position:
     value: float
     group: PositionGroup
 
+    # pylint: disable=redefined-builtin
     def __init__(self, type: PositionType, name: str, value: float,
                  group: PositionGroup = PositionGroup.DEFAULT()):
         self.type = type
@@ -208,8 +193,7 @@ class Position:
             if self.group != other.group:
                 raise ValueError("Cannot add positions of different groups")
             return PositionAcquisition(
-                Position(self.type, self.name, self.value + other.value, self.group),
-                other.value)
+                Position(self.type, self.name, self.value + other.value, self.group), other.value)
         if isinstance(other, PositionAcquisition):
             if self.type != other.position.type:
                 raise ValueError("Cannot add positions of different types")
@@ -221,6 +205,7 @@ class Position:
         raise ValueError(f"Cannot add Position and {type(other)}")
 
 
+# pylint: disable=too-few-public-methods
 class PositionAcquisition:
     """An acquisition of a position."""
     position: Position
@@ -234,6 +219,7 @@ class PositionAcquisition:
         return f"{self.position.name} ({self.position.type.value}$): {round(self.amount, 2)}"
 
 
+# pylint: disable=too-few-public-methods
 class PortfolioCompositionTarget:
     """A target portfolio composition."""
     TypeComposition = Dict[PositionType, float]
@@ -246,13 +232,8 @@ class PortfolioCompositionTarget:
     position_composition: PositionComposition
     group_composition: GroupComposition
 
-    def __init__(
-            self,
-            type_composition: TypeComposition,
-            position_composition: Dict[str, float],
-            current_composition: "PortfolioComposition",
-            group_composition: GroupComposition
-    ):
+    def __init__(self, type_composition: TypeComposition, position_composition: Dict[str, float],
+                 current_composition: "PortfolioComposition", group_composition: GroupComposition):
         self.type_composition = PortfolioCompositionTarget.process_target_type_composition(
             type_composition, current_composition)
         self.position_composition = position_composition
@@ -261,11 +242,10 @@ class PortfolioCompositionTarget:
     @staticmethod
     def process_target_type_composition(
             type_composition: "PortfolioCompositionTarget.TypeComposition",
-            current_composition: "PortfolioComposition"
-    ) -> TypeComposition:
+            current_composition: "PortfolioComposition") -> TypeComposition:
         """Validate the target type composition and ensure that child categories are scaled
         according to their current proportions if only their parent category/type is specified."""
-        composition = type_composition
+        comp = type_composition
         current = current_composition.get_portfolio_composition()
         tree = PositionType.get_type_tree()
         for node in tree:
@@ -276,12 +256,12 @@ class PortfolioCompositionTarget:
                         node.descendents):
                     # Scale the children according to their current proportions
                     for descendent in node.descendents:
-                        composition[descendent.position_type] = current.get(
-                            descendent.position_type, 0) / current.get(node.position_type) * \
-                                                                composition[node.position_type]
+                        comp[descendent.position_type] = current.get(
+                            descendent.position_type, 0) / current[node.position_type] * \
+                                                         comp[node.position_type]
 
-        not_specified_types = set(PositionType.get_all_types()) - (set(composition.keys()) | set(
-            contained_type for type in composition.keys() for contained_type in
+        not_specified_types = set(PositionType.get_all_types()) - (set(comp.keys()) | set(
+            contained_type for type in comp.keys() for contained_type in
             type.get_contained_types()))
         current_proportion_of_specified_types = sum(
             map(lambda type: current.get(type, 0), type_composition.keys()))
@@ -289,9 +269,9 @@ class PortfolioCompositionTarget:
         # Scale the not specified types according to their current proportions but within the
         # boundaries of the specified types
         k = current_proportion_of_specified_types / target_proportion_of_specified_types
-        for type in not_specified_types:
-            composition[type] = current.get(type, 0) * k
-        return composition
+        for type_ in not_specified_types:
+            comp[type_] = current.get(type_, 0) * k
+        return comp
 
 
 class PortfolioComposition:
@@ -305,7 +285,7 @@ class PortfolioComposition:
     def load_from_csv(filename: str) -> "PortfolioComposition":
         """Load a portfolio composition from a csv file"""
         data = pd.read_csv(filename, delimiter=";")
-        groups = []
+        groups: List[PositionGroup] = []
         positions = []
         for row in data.iterrows():
             row = row[1]
@@ -317,12 +297,7 @@ class PortfolioComposition:
                 groups.append(group)
             else:
                 group = PositionGroup.DEFAULT()
-            position = Position(
-                PositionType(row["Kategorie"]),
-                row["Name"],
-                row["Wert"],
-                group
-            )
+            position = Position(PositionType(row["Kategorie"]), row["Name"], row["Wert"], group)
             positions.append(position)
         return PortfolioComposition(positions)
 
@@ -338,11 +313,11 @@ class PortfolioComposition:
             map(lambda position: position.value,  # position value for each type
                 # only for positions of the type
                 filter(lambda position: position.type.is_contained_in(position_type),
-                       self.positions)
-                )) for position_type in PositionType.get_all_types()}
+                       self.positions))) for position_type in PositionType.get_all_types()}
 
     def get_group_composition(self) -> PortfolioCompositionTarget.GroupComposition:
-        """Get the portfolio group composition. (percentage of portfolio value per position group)"""
+        """Get the portfolio group composition.
+        (percentage of portfolio value per position group)"""
         total_value = self.get_total_value()
         return {key: value / total_value for key, value in
                 self.get_group_value_composition().items()}
@@ -354,52 +329,53 @@ class PortfolioComposition:
         return {position_group: sum(  # sum of position proportions for each group
             map(lambda position: position.value,  # position proportion for each group
                 # only for positions of the group
-                filter(lambda position: position.group == position_group,
-                       self.positions)
-                )) for position_group in all_groups}
+                filter(lambda position: position.group == position_group, self.positions))) for
+            position_group in all_groups}
 
     def get_total_value(self, position_type: Optional[PositionType] = None):
+        """Get the total value of the composition of all positions of `position_type`."""
         return sum(map(lambda position: position.value, filter(
             lambda position: position_type is None or position.type.is_contained_in(position_type),
             self.positions)))
 
     def get_total_value_of_group(self, group: PositionGroup):
-        return sum(map(lambda position: position.value, filter(
-            lambda position: position.group == group,
-            self.positions)))
+        """Get the total value of the composition of all positions of `group`."""
+        return sum(map(lambda position: position.value,
+                       filter(lambda position: position.group == group, self.positions)))
 
     def __add__(self, other):
         if isinstance(other, Position):
             return PortfolioComposition(self.positions + [other])
-        elif isinstance(other, PositionAcquisition):
-            positions = list(filter(lambda position: position.type == other.position.type and
-                                                     position.name == other.position.name,
-                                    self.positions))
+        if isinstance(other, PositionAcquisition):
+            positions = list(
+                filter(lambda
+                           position: position.type == other.position.type
+                                     and position.name == other.position.name,
+                       self.positions))
             if len(positions) == 0:
                 return PortfolioComposition(self.positions + [other.position])
-            elif len(positions) == 1:
+            if len(positions) == 1:
                 new_position = positions[0] + other
                 idx = self.positions.index(positions[0])
                 new_positions = self.positions.copy()
                 new_positions[idx] = new_position
                 return PortfolioComposition(new_positions)
-            else:
-                raise ValueError("Multiple positions with the same type and name.")
-        elif isinstance(other, list):
+            raise ValueError("Multiple positions with the same type and name.")
+        if isinstance(other, list):
             if len(other) == 0:
                 return self
             return (self + other[0]) + other[1:]
-        else:
-            raise ValueError(f"Cannot add PortfolioComposition and {type(other)}")
+        raise ValueError(f"Cannot add PortfolioComposition and {type(other)}")
 
     def __str__(self):
         return "\n".join(map(str, self.positions))
 
-    def get_required_acquisitions(self, target: PortfolioCompositionTarget, budget: float) -> Tuple[
-        List[
-            PositionAcquisition],
-        "PortfolioComposition"]:
-        """Get the required acquisitions to match a target portfolio composition (within the `budget`)."""
+    # pylint: disable=too-many-locals
+    def get_required_acquisitions(self, target_comp: PortfolioCompositionTarget, budget: float) -> \
+            Tuple[
+                List[PositionAcquisition], "PortfolioComposition"]:
+        """Get the required acquisitions to match a target
+        portfolio composition (within the `budget`)."""
         current_total_value = self.get_total_value()
         new_total_value = current_total_value + budget
         current_composition = self.get_portfolio_composition()
@@ -407,7 +383,7 @@ class PortfolioComposition:
 
         # Stage 1: Calculate the required acquisitions for each position type
         acquisition_budget_by_type = {}
-        for position_type, target_proportion in target.type_composition.items():
+        for position_type, target_proportion in target_comp.type_composition.items():
             current_proportion = current_composition.get(position_type, 0)
             target_value = new_total_value * target_proportion
             current_value = current_total_value * current_proportion
@@ -416,47 +392,50 @@ class PortfolioComposition:
 
         # Stage 2: Calculate the required acquisitions for each position group
         acquisition_budget_by_group = {}
-        for position_group, target_proportion in target.group_composition.items():
+        for position_group, target_proportion in target_comp.group_composition.items():
             current_proportion = current_group_composition.get(position_group, 0)
-            position_type = \
-                list(filter(lambda pos: pos.group == position_group,
-                            self.positions))[0].type
-            target_proportion_of_category = target.type_composition.get(position_type,
-                                                                        current_composition.get(
-                                                                            position_type))
+            position_type = list(filter(lambda pos: pos.group == position_group, self.positions))[
+                0].type
+            target_proportion_of_category = target_comp.type_composition.get(
+                position_type,
+                current_composition.get(position_type)
+            )
             target_value = new_total_value * target_proportion * target_proportion_of_category
             current_value = current_total_value * current_proportion
             required_value = target_value - current_value
-            acquisition_budget_by_group[
-                position_group] = required_value
+            acquisition_budget_by_group[position_group] = required_value
 
         # Stage 3: Calculate the required acquisitions for each position
-        acquisitions = []
+        required_acquisitions = []
         for position in self.positions:
             current_proportion_in_category = position.value / (
-                    current_composition.get(position.type,
-                                            position.value) * current_total_value)
-            target_proportion_in_category = target.position_composition.get(position.name,
-                                                                            current_proportion_in_category)
-            target_proportion_of_category = target.type_composition.get(position.type,
-                                                                        current_composition.get(
-                                                                            position.type))
-            target_value = new_total_value * target_proportion_of_category * target_proportion_in_category
+                    current_composition.get(position.type, position.value) * current_total_value)
+            target_proportion_in_category = target_comp.position_composition.get(
+                position.name,
+                current_proportion_in_category
+            )
+            target_proportion_of_category = target_comp.type_composition.get(
+                position.type,
+                current_composition.get(position.type)
+            )
+            target_value = new_total_value * target_proportion_of_category \
+                           * target_proportion_in_category
             current_value = position.value
             requested = target_value - current_value
-            group_budget = acquisition_budget_by_group.get(position.group,
-                                                           requested) if position.group != PositionGroup.DEFAULT() else requested
+            group_budget = acquisition_budget_by_group.get(
+                position.group,
+                requested) if position.group != PositionGroup.DEFAULT() else requested
             required_value = requested * acquisition_budget_by_type.get(position.type,
                                                                         requested) * group_budget
-            acquisitions.append(PositionAcquisition(position, required_value))
+            required_acquisitions.append(PositionAcquisition(position, required_value))
 
         # Stage 4: Normalize acquisitions to fit into the budget
-        budget_required = sum(map(lambda acquisition: acquisition.amount, acquisitions))
+        budget_required = sum(map(lambda acquisition: acquisition.amount, required_acquisitions))
         normalized_acquisitions = []
-        for acquisition in acquisitions:
+        for acquisition in required_acquisitions:
             normalized_amount = acquisition.amount / budget_required * budget
-            normalized_acquisitions.append(PositionAcquisition(acquisition.position,
-                                                               normalized_amount))
+            normalized_acquisitions.append(
+                PositionAcquisition(acquisition.position, normalized_amount))
 
         return normalized_acquisitions, self + normalized_acquisitions
 
@@ -469,11 +448,11 @@ def _load_portfolio_composition() -> PortfolioComposition:
     name = cell.getString()
     while name:
         value = sheet.getCellByPosition(PORTFOLIO_TABLE_COLUMNS["value"], row).getValue()
-        type = PositionType(
+        type_ = PositionType(
             sheet.getCellByPosition(PORTFOLIO_TABLE_COLUMNS["type"], row).getString())
-        groupValue = sheet.getCellByPosition(PORTFOLIO_TABLE_COLUMNS["group"], row).getString()
-        group = PositionGroup(groupValue) if groupValue else PositionGroup.DEFAULT()
-        positions.append(Position(type, name, value, group))
+        group_value = sheet.getCellByPosition(PORTFOLIO_TABLE_COLUMNS["group"], row).getString()
+        group = PositionGroup(group_value) if group_value else PositionGroup.DEFAULT()
+        positions.append(Position(type_, name, value, group))
         row += 1
         cell = sheet.getCellByPosition(PORTFOLIO_TABLE_COLUMNS["name"], row)
         name = cell.getString()
@@ -492,8 +471,8 @@ def _load_portfolio_composition_target() -> PortfolioCompositionTarget:
     while type_name and type_name != "Gruppen":
         percentage = sheet.getCellByPosition(
             PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS["percentage"], row).getValue()
-        type = PositionType(type_name)
-        type_targets[type] = percentage
+        type_ = PositionType(type_name)
+        type_targets[type_] = percentage
         row += 1
         cell = sheet.getCellByPosition(
             PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS["name"], row)
@@ -522,8 +501,7 @@ def _load_portfolio_composition_target() -> PortfolioCompositionTarget:
     name = cell.getString()
     while name:
         proportion_cell = sheet.getCellByPosition(
-            PORTFOLIO_TABLE_COLUMNS["target_proportion_in_category"],
-            row)
+            PORTFOLIO_TABLE_COLUMNS["target_proportion_in_category"], row)
         if proportion_cell.getString() != "":
             target_proportion_in_category = proportion_cell.getValue()
             position_targets[name] = target_proportion_in_category
@@ -545,22 +523,20 @@ def write_portfolio_summary(*args, **kwargs):
 def _write_summary_for_portfolio(composition: PortfolioComposition, start_col: int, start_row: int):
     type_composition = composition.get_portfolio_composition()
     group_composition = composition.get_group_composition()
-    for row, type in enumerate(PORTFOLIO_SUMMARY_POSITION_TYPES):
-        value = composition.get_total_value(type)
-        sheet.getCellByPosition(start_col + 1,
-                                start_row + row).setValue(value)
+    for row, type_ in enumerate(PORTFOLIO_SUMMARY_POSITION_TYPES):
+        value = composition.get_total_value(type_)
+        sheet.getCellByPosition(start_col + 1, start_row + row).setValue(value)
     row_idx = len(PORTFOLIO_SUMMARY_POSITION_TYPES) + start_row + 1
     _clear_cells(row_idx, start_col, 25)
     _clear_cells(row_idx, start_col + 1, 25)
-    for type, proportion in type_composition.items():
-        sheet.getCellByPosition(start_col, row_idx).setString(type.value)
+    for type_, proportion in type_composition.items():
+        sheet.getCellByPosition(start_col, row_idx).setString(type_.value)
         sheet.getCellByPosition(start_col + 1, row_idx).setValue(proportion)
-        sheet.getCellByPosition(start_col + 2, row_idx).setValue(composition.get_total_value(type))
+        sheet.getCellByPosition(start_col + 2, row_idx).setValue(composition.get_total_value(type_))
         row_idx += 1
     row_idx += 1
     for group, proportion in group_composition.items():
-        sheet.getCellByPosition(start_col, row_idx).setString(
-            group.name)
+        sheet.getCellByPosition(start_col, row_idx).setString(group.name)
         sheet.getCellByPosition(start_col + 1, row_idx).setValue(proportion)
         sheet.getCellByPosition(start_col + 2, row_idx).setValue(
             composition.get_total_value_of_group(group))
@@ -593,27 +569,27 @@ def write_portfolio_acquisition_recommendations(*args, **kwargs):
 
 
 def write_recommendations_resulting_portfolio(composition: PortfolioComposition):
+    """Write the portfolio that results from the recommendations."""
     for column in PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS.values():
         _clear_cells(PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_ROW_START, column,
                      25)
     row = PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_ROW_START
     for row_idx, position in enumerate(composition.positions):
-        sheet.getCellByPosition(PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS[
-                                    "type"],
-                                row + row_idx).setString(position.type.value)
-        sheet.getCellByPosition(PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS[
-                                    "name"],
-                                row + row_idx).setString(position.name)
-        sheet.getCellByPosition(PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS[
-                                    "value"],
-                                row + row_idx).setValue(position.value)
-        sheet.getCellByPosition(PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS[
-                                    "group"],
-                                row + row_idx).setString(position.group.display_value)
+        sheet.getCellByPosition(
+            PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS["type"],
+            row + row_idx).setString(position.type.value)
+        sheet.getCellByPosition(
+            PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS["name"],
+            row + row_idx).setString(position.name)
+        sheet.getCellByPosition(
+            PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS["value"],
+            row + row_idx).setValue(position.value)
+        sheet.getCellByPosition(
+            PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS["group"],
+            row + row_idx).setString(position.group.display_value)
     _write_summary_for_portfolio(composition,
                                  PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS[
-                                     "summary"],
-                                 row)
+                                     "summary"], row)
 
 
 def export_portfolio(*args, **kwargs):
@@ -623,38 +599,5 @@ def export_portfolio(*args, **kwargs):
         file.write("Gruppe;Kategorie;Name;Wert\n")
         for position in composition.positions:
             file.write(
-                f"{position.group.display_value};{position.type.value};{position.name};{position.value}\n")
-
-
-if __name__ == "__main__":
-    gWorld = PositionGroup("World")
-    gUS = PositionGroup("US")
-    gEurope = PositionGroup("Europe")
-
-    composition = PortfolioComposition([
-        Position(PositionType.INDEX_FUND, "iShares MSCI Europe SRI", 7198.35, gEurope),
-        Position(PositionType.INDEX_FUND, "UBS MSCI World SRI", 7527.42, gWorld),
-        Position(PositionType.INDEX_FUND, "Vanguard S+P 500", 7925.45, gUS),
-        Position(PositionType.INDIVIDUAL_STOCK, "BYD Co.", 321.2),
-        Position(PositionType.INDEX_FUND, "Vanguard FTSE DEV.EU", 390.31, gEurope),
-        Position(PositionType.INDEX_FUND, "Lyxor Net Zero 2050 S&P 500", 195.31, gUS),
-        Position(PositionType.SAVINGS_ACCOUNT, "Savings account", 3115.09),
-        Position(PositionType.CHECKING_ACCOUNT, "Checking account", 255),
-        Position(PositionType.FIXED_DEPOSIT, "Fixed deposit", 3000.29)
-    ])
-    comp = composition.get_portfolio_composition()
-
-    target = PortfolioCompositionTarget({
-        PositionType.FIXED_DEPOSIT: .1,
-        PositionType.IMMEDIATELY_AVAILABLE: .110573
-    },
-        {},
-        composition, {
-            gWorld: .34,
-            gUS: .33,
-            gEurope: .33
-        }
-    )
-    acquisitions, new_composition = composition.get_required_acquisitions(target, 500)
-    print("Necessary acquisitions: " + str(acquisitions))
-    print("New composition: " + str(new_composition))
+                f"{position.group.display_value};{position.type.value};\
+                {position.name};{position.value}\n")

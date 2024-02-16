@@ -11,6 +11,7 @@ class Overlay(Simulation):
     """A special simulation that combines the results of multiple simulations."""
     simulations: List[Simulation]
 
+    # pylint: disable=too-many-arguments
     def __init__(self, export_directory: str, identifier: str, context: SimulationContext,
                  o_simulations: Union[List[str], List[Simulation]],
                  automatic_identifier_counting: bool = True):

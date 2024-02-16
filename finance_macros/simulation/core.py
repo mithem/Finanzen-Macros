@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Optional, TypeVar
 
 import pandas as pd
 
-CSV_FILE_COUNT_PER_SIM_TYPE = {}
+CSV_FILE_COUNT_PER_SIM_TYPE: Dict[str, int] = {}
 
 
 class Simulation:
@@ -140,6 +140,7 @@ class TimeSeriesSimulation(Simulation):
         self.end_condition_achieved_callback = end_condition_achieved_callback
 
     def reset_time_series_data(self):
+        """Reset the time history."""
         self.d_dates = [self.start_date]
 
     def call_simulation_functions(self,

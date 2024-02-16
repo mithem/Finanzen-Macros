@@ -1,2 +1,2 @@
 [MASTER]
-disable=cyclic-import
+disable=cyclic-import,cell-var-from-loop

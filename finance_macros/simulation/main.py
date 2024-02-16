@@ -34,7 +34,7 @@ def run_simulation(context: SimulationContext, simulation_type: str, export_dire
 def delete_existing(export_directory: str):
     """Delete existing data."""
     data = export_viewer.load_data(export_directory)
-    for simulation_type in data.keys():
+    for simulation_type in data.keys():  # pylint: disable=consider-iterating-dictionary
         os.remove(os.path.join(export_directory, simulation_type + ".csv"))
     print(f"Deleted all existing simulations from '{export_directory}': {', '.join(data.keys())}.")
 
