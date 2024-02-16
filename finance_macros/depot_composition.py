@@ -123,10 +123,10 @@ try:
     PORTFOLIO_TABLE_ROW_START = 8
     PORTFOLIO_TABLE_COLUMNS = {
         "name": 0,
-        "value": 9,
-        "type": 11,
-        "target_proportion_in_category": 13,
-        "group": 14
+        "value": 11,
+        "type": 13,
+        "target_proportion_in_category": 15,
+        "group": 16
     }
 
     PORTFOLIO_COMPOSITION_TARGET_TYPES_ROW_START = 8
