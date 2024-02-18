@@ -3,7 +3,7 @@ import datetime
 import os
 
 HEADER_ROW = 7
-DATE_COLUMN = 29
+DATE_COLUMN = 31
 PORTFOLIO_FIRST_ROW = 8
 PORTFOLIO_IDENTIFIER_COLUMN = 3
 PORTFOLIO_SHARE_COUNT_COLUMN = 8
@@ -15,7 +15,7 @@ try:
     desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
     model = desktop.getCurrentComponent()
     sheet = model.getSheets().getByName("Portfolio")
-    EXPORT_DIRECTORY = sheet.getCellByPosition(30, 5).getString()
+    EXPORT_DIRECTORY = sheet.getCellByPosition(32, 5).getString()
 except NameError:  # running tests
     EXPORT_DIRECTORY = "~/"
 

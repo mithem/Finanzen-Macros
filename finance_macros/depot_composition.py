@@ -4,8 +4,6 @@ import enum
 import os
 from typing import List, Union, Dict, Optional, Tuple
 
-import pandas as pd
-
 
 # Man, it sucks that you can't use external pip package with LibreOffice's Python interpreter :/
 class TreeNode:
@@ -110,7 +108,7 @@ try:
     desktop = XSCRIPTCONTEXT.getDesktop()  # type: ignore
     model = desktop.getCurrentComponent()
     sheet = model.getSheets().getByName("Portfolio")
-    EXPORT_DIRECTORY = sheet.getCellByPosition(30, 5).getString()
+    EXPORT_DIRECTORY = sheet.getCellByPosition(32, 5).getString()
 
     PORTFOLIO_SUMMARY_COLUMN = 0
     PORTFOLIO_SUMMARY_ROW_START = 28
@@ -123,20 +121,20 @@ try:
                                "target_proportion_in_category": 15, "group": 16}
 
     PORTFOLIO_COMPOSITION_TARGET_TYPES_ROW_START = 8
-    PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS = {"name": 16, "percentage": 17}
+    PORTFOLIO_COMPOSITION_TARGET_TYPES_AND_GROUPS_COLUMNS = {"name": 18, "percentage": 19}
 
     PORTFOLIO_COMPOSITION_TARGET_GROUPS_ROW_START = 20
 
-    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_BUDGET_CELL = sheet.getCellByPosition(17, 32)
+    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_BUDGET_CELL = sheet.getCellByPosition(19, 32)
     PORTFOLIO_ACQUISITION_RECOMMENDATIONS_ROW_START = 37
-    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_COLUMNS = {"type": 16, "name": 17, "value": 18}
+    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_COLUMNS = {"type": 18, "name": 19, "value": 20}
 
     PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_ROW_START = 37
-    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS = {"type": 20, "name": 21,
-                                                                         "value": 22, "group": 23,
-                                                                         "summary": 25}
+    PORTFOLIO_ACQUISITION_RECOMMENDATIONS_RESULTING_PORTFOLIO_COLUMNS = {"type": 22, "name": 23,
+                                                                         "value": 24, "group": 25,
+                                                                         "summary": 27}
 except NameError:  # running tests
-    pass
+    import pandas as pd
 
 
 class PositionGroup:
