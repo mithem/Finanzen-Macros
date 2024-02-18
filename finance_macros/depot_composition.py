@@ -282,7 +282,8 @@ class PortfolioComposition:
     @staticmethod
     def load_from_csv(filename: str) -> "PortfolioComposition":
         """Load a portfolio composition from a csv file"""
-        data = pd.read_csv(filename, delimiter=";")
+        # pd imported when not called from LibreOffice, therefore fine
+        data = pd.read_csv(filename, delimiter=";")  # pylint:disable=used-before-assignment
         groups: List[PositionGroup] = []
         positions = []
         for row in data.iterrows():
